@@ -14,6 +14,6 @@ VoiceR listens to what you say and tanscribes your words. In parallel, it uses M
 Both is fed into an LLM (API key required) which then decides which action to take. VoiceR will then execute the action.
 
 ## Tech Stack
-C#, UIA, Win UI 3
+C# with .Net 10, UIA, Win UI 3
 
 VoiceR runs as tray application.
