@@ -17,3 +17,7 @@ Both is fed into an LLM (API key required) which then decides which action to ta
 C#, UIA, Win UI 3
 
 VoiceR runs as tray application.
+
+### Dependencies
+- .Net 10.0.1: [https://dotnet.microsoft.com/en-us/download/dotnet/10.0]
+- Windows App SDK 1.8.3: [https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/downloads]
