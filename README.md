@@ -14,4 +14,5 @@ Both is fed into an LLM (API key required) which then decides which action to ta
 
 ## Tech Stack
 C#, UIA, Win UI 3
+
 VoiceR runs as tray application.
