@@ -6,6 +6,7 @@ You speak to your Windows installation and tell it what to do. Examples:
 - Open Start Menu
 - Click OK button
 - Enter "John Doe" in that input field
+
 Ideally, you can fully interact with your Window with voice only.
 
 ## How it works
