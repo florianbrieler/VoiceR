@@ -1,0 +1,11 @@
+# IDE
+.vscode/
+.cursor/
+.vs/
+
+# Build artifacts
+bin/
+obj/
+
+# Logs
+*.log
