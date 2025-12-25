@@ -93,6 +93,19 @@ namespace VoiceR
             };
             menu.Items.Add(configureItem);
 
+            // Analyze menu item
+            ToolStripMenuItem analyzeItem = new ToolStripMenuItem("Analyze");
+            analyzeItem.Click += (sender, e) =>
+            {
+                // Create and show the analyze window on the UI thread
+                _mainWindow.DispatcherQueue.TryEnqueue(() =>
+                {
+                    var analyzeWindow = new AnalyzeWindow();
+                    analyzeWindow.Activate();
+                });
+            };
+            menu.Items.Add(analyzeItem);
+
             // Separator
             menu.Items.Add(new ToolStripSeparator());
 
