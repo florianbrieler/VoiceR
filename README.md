@@ -9,15 +9,14 @@ You speak to your Windows installation and tell it what to do. Examples:
 
 Ideally, you can fully interact with your Window with voice only.
 
+VoiceR runs as tray application.
+
 ## How it works
 VoiceR listens to what you say and tanscribes your words. In parallel, it uses Microsoft UI Automation (UIA) to understand all the components on your screen.
 Both is fed into an LLM (API key required) which then decides which action to take. VoiceR will then execute the action.
 
-## Tech Stack
-C#, UIA, Win UI 3
-
-VoiceR runs as tray application.
-
-### Dependencies
+## Tech Stack and Dependencies
+- C#, UIA, Win UI 3
 - .Net 10.0.1: [https://dotnet.microsoft.com/en-us/download/dotnet/10.0]
 - Windows App SDK 1.8.3: [https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/downloads]
+- Whisper.NET and NAudio: dotnet add package Whisper.net; dotnet add package Whisper.net.Runtime; dotnet add package NAudio

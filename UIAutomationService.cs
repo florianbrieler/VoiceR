@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Windows.Automation;
 
@@ -10,6 +9,9 @@ namespace VoiceR
     /// </summary>
     public static class UIAutomationService
     {
+
+        public const int MaxDepth = 5;
+
         /// <summary>
         /// Result of a UI Automation scan.
         /// </summary>
@@ -53,11 +55,7 @@ namespace VoiceR
             catch (Exception ex)
             {
                 // If something goes wrong, create a placeholder node
-                result.RootNode = new UIAutomationTreeNode
-                {
-                    ControlType = "Error",
-                    Name = ex.Message
-                };
+                result.RootNode = UIAutomationTreeNode.fromError(ex.Message);
                 result.TotalNodeCount = 1;
             }
 
@@ -70,24 +68,14 @@ namespace VoiceR
         /// <summary>
         /// Recursively builds a tree node from an AutomationElement.
         /// </summary>
-        private static UIAutomationTreeNode BuildTreeNode(AutomationElement element, ref int nodeCount)
+        private static UIAutomationTreeNode BuildTreeNode(AutomationElement element, ref int nodeCount, int depth=0)
         {
             nodeCount++;
 
-            var node = new UIAutomationTreeNode();
+            UIAutomationTreeNode node = UIAutomationTreeNode.fromElement(element);
 
-            try
-            {
-                // Get element properties
-                node.ControlType = GetControlTypeName(element);
-                node.Name = element.Current.Name ?? string.Empty;
-                node.AutomationId = element.Current.AutomationId ?? string.Empty;
-                node.ClassName = element.Current.ClassName ?? string.Empty;
-            }
-            catch
-            {
-                // Element properties may throw if element becomes invalid
-                node.ControlType = "Unknown";
+            if (depth >= MaxDepth) {
+                return node;
             }
 
             try
@@ -100,8 +88,8 @@ namespace VoiceR
                 {
                     try
                     {
-                        var childNode = BuildTreeNode(child, ref nodeCount);
-                        node.Children.Add(childNode);
+                        var childNode = BuildTreeNode(child, ref nodeCount, depth + 1);
+                        node.AddChild(childNode);
                         child = walker.GetNextSibling(child);
                     }
                     catch
@@ -124,29 +112,6 @@ namespace VoiceR
             }
 
             return node;
-        }
-
-        /// <summary>
-        /// Gets the control type name from an AutomationElement.
-        /// </summary>
-        private static string GetControlTypeName(AutomationElement element)
-        {
-            try
-            {
-                ControlType controlType = element.Current.ControlType;
-                // ControlType.ProgrammaticName returns "ControlType.Button" etc.
-                string name = controlType.ProgrammaticName;
-                // Remove the "ControlType." prefix
-                if (name.StartsWith("ControlType."))
-                {
-                    return name.Substring(12);
-                }
-                return name;
-            }
-            catch
-            {
-                return "Unknown";
-            }
         }
     }
 }

@@ -37,6 +37,7 @@
         <!-- TreeView for UI elements -->
         <TreeView Grid.Row="1"
                   x:Name="UITreeView"
-                  SelectionMode="Single"/>
+                  SelectionMode="Single"
+                  ContextRequested="TreeView_ContextRequested"/>
     </Grid>
 </Window>

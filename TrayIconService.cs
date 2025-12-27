@@ -106,6 +106,19 @@ namespace VoiceR
             };
             menu.Items.Add(analyzeItem);
 
+            // Voice menu item
+            ToolStripMenuItem voiceItem = new ToolStripMenuItem("Voice");
+            voiceItem.Click += (sender, e) =>
+            {
+                // Create and show the voice window on the UI thread
+                _mainWindow.DispatcherQueue.TryEnqueue(() =>
+                {
+                    var voiceWindow = new VoiceWindow();
+                    voiceWindow.Activate();
+                });
+            };
+            menu.Items.Add(voiceItem);
+
             // Separator
             menu.Items.Add(new ToolStripSeparator());
 
