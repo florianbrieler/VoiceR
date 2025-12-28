@@ -7,7 +7,7 @@ namespace VoiceR
     /// <summary>
     /// Service for retrieving UI elements using Microsoft UI Automation.
     /// </summary>
-    public static class UIAutomationService
+    public static class ItemService
     {
 
         public const int MaxDepth = 5;
@@ -20,7 +20,7 @@ namespace VoiceR
             /// <summary>
             /// The root node of the UI tree.
             /// </summary>
-            public UIAutomationTreeNode RootNode { get; set; } = new UIAutomationTreeNode();
+            public Item RootNode { get; set; } = new Item();
 
             /// <summary>
             /// Time taken to retrieve all UI elements in milliseconds.
@@ -55,7 +55,7 @@ namespace VoiceR
             catch (Exception ex)
             {
                 // If something goes wrong, create a placeholder node
-                result.RootNode = UIAutomationTreeNode.fromError(ex.Message);
+                result.RootNode = Item.FromError(ex.Message);
                 result.TotalNodeCount = 1;
             }
 
@@ -68,11 +68,11 @@ namespace VoiceR
         /// <summary>
         /// Recursively builds a tree node from an AutomationElement.
         /// </summary>
-        private static UIAutomationTreeNode BuildTreeNode(AutomationElement element, ref int nodeCount, int depth=0)
+        private static Item BuildTreeNode(AutomationElement element, ref int nodeCount, int depth=0)
         {
             nodeCount++;
 
-            UIAutomationTreeNode node = UIAutomationTreeNode.fromElement(element);
+            Item node = Item.FromElement(element);
 
             if (depth >= MaxDepth) {
                 return node;
@@ -80,6 +80,15 @@ namespace VoiceR
 
             try
             {
+                // Use TrueCondition to retrieve all elements.
+                // AutomationElementCollection elementCollectionAll = elementMainWindow.FindAll(
+                //     TreeScope.Subtree, Condition.TrueCondition);
+                // Console.WriteLine("\nAll control types:");
+                // foreach (AutomationElement autoElement in elementCollectionAll)
+                // {
+                //     Console.WriteLine(autoElement.Current.Name);
+                // }
+                
                 // Use ControlViewWalker for a cleaner view of the UI tree
                 TreeWalker walker = TreeWalker.ControlViewWalker;
                 AutomationElement? child = walker.GetFirstChild(element);

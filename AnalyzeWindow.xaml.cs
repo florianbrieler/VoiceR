@@ -10,7 +10,7 @@ namespace VoiceR
     public sealed partial class AnalyzeWindow : Window
     {
         // Dictionary to map TreeViewNode to UIAutomationTreeNode
-        private Dictionary<TreeViewNode, UIAutomationTreeNode> _nodeMap = new Dictionary<TreeViewNode, UIAutomationTreeNode>();
+        private Dictionary<TreeViewNode, Item> _nodeMap = new Dictionary<TreeViewNode, Item>();
         
         // Reverse mapping from display text to TreeViewNode (since TreeViewItem.Content is the string)
         private Dictionary<string, TreeViewNode> _displayTextToNodeMap = new Dictionary<string, TreeViewNode>();
@@ -43,7 +43,7 @@ namespace VoiceR
             TotalElementsText.Text = "...";
 
             // Run the scan on a background thread to keep UI responsive
-            var result = await Task.Run(() => UIAutomationService.ScanUITree());
+            var result = await Task.Run(() => ItemService.ScanUITree());
 
             // Update metrics
             RetrievalTimeText.Text = $"{result.RetrievalTimeMs} ms";
@@ -53,7 +53,7 @@ namespace VoiceR
             PopulateTreeView(result.RootNode);
         }
 
-        private void PopulateTreeView(UIAutomationTreeNode rootNode)
+        private void PopulateTreeView(Item rootNode)
         {
             UITreeView.RootNodes.Clear();
             _nodeMap.Clear(); // Clear the mapping when repopulating
@@ -63,7 +63,7 @@ namespace VoiceR
             UITreeView.RootNodes.Add(rootTreeNode);
         }
 
-        private TreeViewNode CreateTreeViewNode(UIAutomationTreeNode node)
+        private TreeViewNode CreateTreeViewNode(Item node)
         {
             var treeViewNode = new TreeViewNode
             {
@@ -149,51 +149,156 @@ namespace VoiceR
                 }
             }
 
-            // Check if the node has window pattern available
-            if (targetNode != null && _nodeMap.TryGetValue(targetNode, out var uiNode) && uiNode.IsWindowPatternAvailable)
+            // Check if we found a valid node with any actionable patterns
+            if (targetNode != null && _nodeMap.TryGetValue(targetNode, out var uiNode))
             {
-                // Store the target node for menu item handlers
-                _contextMenuTargetNode = targetNode;
-                
-                // Create and show the context menu programmatically
-                var menuFlyout = new MenuFlyout();
-                
-                var maximizeItem = new MenuFlyoutItem { Text = "Maximize" };
-                maximizeItem.Click += MaximizeMenuItem_Click;
-                menuFlyout.Items.Add(maximizeItem);
-                
-                var minimizeItem = new MenuFlyoutItem { Text = "Minimize" };
-                minimizeItem.Click += MinimizeMenuItem_Click;
-                menuFlyout.Items.Add(minimizeItem);
-                
-                var normalItem = new MenuFlyoutItem { Text = "Normal" };
-                normalItem.Click += NormalMenuItem_Click;
-                menuFlyout.Items.Add(normalItem);
-                
-                // Show the menu at the pointer position
-                if (sender is FrameworkElement frameworkElement)
+                bool hasExpandCollapse = uiNode.IsPatternAvailable(Pattern.ExpandCollapse);
+                bool hasInvoke = uiNode.IsPatternAvailable(Pattern.Invoke);
+                bool hasToggle = uiNode.IsPatternAvailable(Pattern.Toggle);
+                bool hasWindow = uiNode.IsPatternAvailable(Pattern.Window);
+
+                // Only show context menu if at least one actionable pattern is available
+                if (hasExpandCollapse || hasInvoke || hasToggle || hasWindow)
                 {
-                    if (args.TryGetPosition(sender, out var point))
+                    // Store the target node for menu item handlers
+                    _contextMenuTargetNode = targetNode;
+                    
+                    // Create and show the context menu programmatically
+                    var menuFlyout = new MenuFlyout();
+                    bool needsSeparator = false;
+
+                    // Group 1: Expand/Collapse
+                    if (hasExpandCollapse)
                     {
-                        menuFlyout.ShowAt(frameworkElement, point);
+                        var expandItem = new MenuFlyoutItem { Text = "Expand" };
+                        expandItem.Click += ExpandMenuItem_Click;
+                        menuFlyout.Items.Add(expandItem);
+
+                        var collapseItem = new MenuFlyoutItem { Text = "Collapse" };
+                        collapseItem.Click += CollapseMenuItem_Click;
+                        menuFlyout.Items.Add(collapseItem);
+
+                        needsSeparator = true;
                     }
-                    else
+
+                    // Group 2: Invoke
+                    if (hasInvoke)
                     {
-                        menuFlyout.ShowAt(frameworkElement);
+                        if (needsSeparator)
+                        {
+                            menuFlyout.Items.Add(new MenuFlyoutSeparator());
+                        }
+
+                        var invokeItem = new MenuFlyoutItem { Text = "Invoke" };
+                        invokeItem.Click += InvokeMenuItem_Click;
+                        menuFlyout.Items.Add(invokeItem);
+
+                        needsSeparator = true;
                     }
+
+                    // Group 3: Toggle
+                    if (hasToggle)
+                    {
+                        if (needsSeparator)
+                        {
+                            menuFlyout.Items.Add(new MenuFlyoutSeparator());
+                        }
+
+                        var toggleItem = new MenuFlyoutItem { Text = "Toggle" };
+                        toggleItem.Click += ToggleMenuItem_Click;
+                        menuFlyout.Items.Add(toggleItem);
+
+                        needsSeparator = true;
+                    }
+
+                    // Group 4: Window state (Maximize, Minimize, Normal)
+                    if (hasWindow)
+                    {
+                        if (needsSeparator)
+                        {
+                            menuFlyout.Items.Add(new MenuFlyoutSeparator());
+                        }
+
+                        var maximizeItem = new MenuFlyoutItem { Text = "Maximize" };
+                        maximizeItem.Click += MaximizeMenuItem_Click;
+                        menuFlyout.Items.Add(maximizeItem);
+                        
+                        var minimizeItem = new MenuFlyoutItem { Text = "Minimize" };
+                        minimizeItem.Click += MinimizeMenuItem_Click;
+                        menuFlyout.Items.Add(minimizeItem);
+                        
+                        var normalItem = new MenuFlyoutItem { Text = "Normal" };
+                        normalItem.Click += NormalMenuItem_Click;
+                        menuFlyout.Items.Add(normalItem);
+
+                        // Group 5: Close Window (separated from window state)
+                        menuFlyout.Items.Add(new MenuFlyoutSeparator());
+
+                        var closeItem = new MenuFlyoutItem { Text = "Close Window" };
+                        closeItem.Click += CloseWindowMenuItem_Click;
+                        menuFlyout.Items.Add(closeItem);
+                    }
+                    
+                    // Show the menu at the pointer position
+                    if (sender is FrameworkElement frameworkElement)
+                    {
+                        if (args.TryGetPosition(sender, out var point))
+                        {
+                            menuFlyout.ShowAt(frameworkElement, point);
+                        }
+                        else
+                        {
+                            menuFlyout.ShowAt(frameworkElement);
+                        }
+                    }
+                    
+                    args.Handled = true;
+                    return;
                 }
-                
-                args.Handled = true;
             }
-            else
-            {
-                // Hide the context menu
-                _contextMenuTargetNode = null;
-                args.Handled = true;
-            }
+
+            // No actionable patterns available - don't show context menu
+            _contextMenuTargetNode = null;
+            args.Handled = true;
         }
 
         private TreeViewNode? _contextMenuTargetNode = null;
+
+        private void ExpandMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            var node = GetContextMenuTargetNode();
+            if (node != null && _nodeMap.TryGetValue(node, out var uiNode))
+            {
+                uiNode.ExpandOrCollapse(ExpandCollapseState.Expanded);
+            }
+        }
+
+        private void CollapseMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            var node = GetContextMenuTargetNode();
+            if (node != null && _nodeMap.TryGetValue(node, out var uiNode))
+            {
+                uiNode.ExpandOrCollapse(ExpandCollapseState.Collapsed);
+            }
+        }
+
+        private void InvokeMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            var node = GetContextMenuTargetNode();
+            if (node != null && _nodeMap.TryGetValue(node, out var uiNode))
+            {
+                uiNode.Invoke();
+            }
+        }
+
+        private void ToggleMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            var node = GetContextMenuTargetNode();
+            if (node != null && _nodeMap.TryGetValue(node, out var uiNode))
+            {
+                uiNode.Toggle();
+            }
+        }
 
         private void MaximizeMenuItem_Click(object sender, RoutedEventArgs e)
         {
@@ -219,6 +324,15 @@ namespace VoiceR
             if (node != null && _nodeMap.TryGetValue(node, out var uiNode))
             {
                 uiNode.SetWindowVisualState(WindowVisualState.Normal);
+            }
+        }
+
+        private void CloseWindowMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            var node = GetContextMenuTargetNode();
+            if (node != null && _nodeMap.TryGetValue(node, out var uiNode))
+            {
+                uiNode.CloseWindow();
             }
         }
 
