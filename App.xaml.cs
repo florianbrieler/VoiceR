@@ -1,5 +1,4 @@
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Windowing;
 
 namespace VoiceR
 {

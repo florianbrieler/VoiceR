@@ -89,7 +89,11 @@ namespace VoiceR
             ToolStripMenuItem configureItem = new ToolStripMenuItem("Configure");
             configureItem.Click += (sender, e) =>
             {
-                ShowAlert("Configure", "Configure has been clicked.");
+                _mainWindow.DispatcherQueue.TryEnqueue(() =>
+                {
+                    var configWindow = new ConfigWindow();
+                    configWindow.Activate();
+                });
             };
             menu.Items.Add(configureItem);
 

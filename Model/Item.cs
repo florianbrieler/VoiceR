@@ -2,24 +2,27 @@ using System;
 using System.Collections.Generic;
 using System.Windows.Automation;
 
-namespace VoiceR
+namespace VoiceR.Model
 {
     /// <summary>
     /// Represents a node in the UI Automation tree hierarchy.
     /// </summary>
     public class Item
     {
-        private string ControlType { get; init; } = string.Empty;
-        private string Name { get; init; } = string.Empty;
-        private string AutomationId { get; init; } = string.Empty;
-        private string ClassName { get; init; } = string.Empty;
+        public string Id { get; init; } = GenerateShortGuid();
+
+        public string ControlType { get; init; } = string.Empty;
+        public string Name { get; init; } = string.Empty;
+        public string AutomationId { get; init; } = string.Empty;
+        public string ClassName { get; init; } = string.Empty;
+        public string HelpText { get; init; } = string.Empty;
 
         public HashSet<Pattern> AvailablePatterns { get; set; } = [];
         public HashSet<Property> Properties { get; set; } = [];
 
-        private bool IsError { get; init; } = false;
+        private bool IsRedundant { get; set; } = false;
 
-        internal AutomationElement? Element { get; init; }
+        public required AutomationElement Element;
 
         /// <summary>
         /// Child nodes in the UI hierarchy.
@@ -28,10 +31,14 @@ namespace VoiceR
 
         public static Item FromElement(AutomationElement element)
         {
+            ArgumentNullException.ThrowIfNull(element);
+
             ControlType controlType = element.Current.ControlType;
             // ControlType.ProgrammaticName returns "ControlType.Button" etc.
             string programmaticName = controlType.ProgrammaticName ?? string.Empty;
             programmaticName = programmaticName.Replace("ControlType.", "");
+
+            object ht = element.GetCurrentPropertyValue(AutomationElement.HelpTextProperty, true);
 
             HashSet<Pattern> availablePatterns = [];
             foreach (Pattern pattern in Enum.GetValues(typeof(Pattern)))
@@ -57,22 +64,13 @@ namespace VoiceR
                 Name = element.Current.Name ?? string.Empty,
                 AutomationId = element.Current.AutomationId ?? string.Empty,
                 ClassName = element.Current.ClassName ?? string.Empty,
+                HelpText = ht == AutomationElement.NotSupported ? string.Empty : (string) ht, // why not just element.current.helpText?
                 AvailablePatterns = availablePatterns,
                 Element = element,
                 Properties = props,
             };
         }
 
-        public static Item FromError(string errorMessage)
-        {
-            return new Item
-            {
-                ControlType = "Error",
-                Name = errorMessage,
-                IsError = true,
-            };
-
-        }
 
         public void AddChild(Item child)
         {
@@ -95,35 +93,52 @@ namespace VoiceR
             {
                 var parts = new List<string>();
 
-                // Always show control type
+                if (IsRedundant)
+                {
+                    parts.Add("(Redundant)");
+                }
+
+                // Always show control type (never empty)
                 parts.Add(ControlType);
 
                 // Add name if present
                 if (!string.IsNullOrEmpty(Name))
                 {
-                    parts[0] = $"{ControlType}: {Name}";
+                    parts.Add($": {Name}");
                 }
 
-                if (!IsError)
+                // Add automation ID if present
+                if (!string.IsNullOrEmpty(AutomationId))
                 {
-                    // Add automation ID if present
-                    if (!string.IsNullOrEmpty(AutomationId))
-                    {
-                        parts.Add($"[{AutomationId}]");
-                    }
-
-                    // Add class name if present
-                    if (!string.IsNullOrEmpty(ClassName))
-                    {
-                        parts.Add($"({ClassName})");
-                    }
-
-                    parts.Add($"| properties: {string.Join(", ", Properties)}");
-                    parts.Add($"| patterns: {(AvailablePatterns.Count > 0 ? string.Join(", ", AvailablePatterns) : "-")}");
+                    parts.Add($"[{AutomationId}]");
                 }
+
+                // Add class name if present
+                if (!string.IsNullOrEmpty(ClassName))
+                {
+                    parts.Add($"({ClassName})");
+                }
+
+                parts.Add($"| properties: {string.Join(", ", Properties)}");
+                parts.Add($"| patterns: {(AvailablePatterns.Count > 0 ? string.Join(", ", AvailablePatterns) : "-")}");
 
                 return string.Join(" ", parts);
             }
+        }
+
+        public void CheckForRedundantItems() {
+            bool b = true;
+            foreach (Item child in Children)
+            {
+                child.CheckForRedundantItems();
+                b = b && child.IsRedundant;
+            }
+            IsRedundant = b && string.IsNullOrEmpty(Name) && AvailablePatterns.Count == 0;
+        }
+
+        private static string GenerateShortGuid()
+        {
+            return Guid.NewGuid().ToString("N")[..12];
         }
     }
 
