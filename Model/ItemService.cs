@@ -72,7 +72,7 @@ namespace VoiceR.Model
                 int itemCount = 0;
                 Root = CollectAllItems(rootElement, _itemById, ref itemCount);
                 TotalItemCount = itemCount;
-                Root.CheckForRedundantItems();
+                Root.CheckLevelOfInformation();
             }
             catch (Exception ex)
             {

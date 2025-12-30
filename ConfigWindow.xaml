@@ -37,6 +37,7 @@
                      PlaceholderText="Enter the system prompt for the LLM"
                      TextWrapping="Wrap"
                      AcceptsReturn="True"
+                     IsSpellCheckEnabled="False"
                      MinHeight="200"
                      Padding="12"
                      BorderThickness="1"

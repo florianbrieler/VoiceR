@@ -22,6 +22,10 @@ namespace VoiceR
             // Initialize tray icon service
             _trayIconService = new TrayIconService(_mainWindow);
             _trayIconService.Initialize();
+
+            // Show Analyze window on startup
+            var analyzeWindow = new AnalyzeWindow();
+            analyzeWindow.Activate();
         }
 
     }

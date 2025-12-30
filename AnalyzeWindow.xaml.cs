@@ -1,10 +1,13 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Windows.Automation;
 using System.Collections.Generic;
 using Microsoft.UI.Xaml.Media;
+using VoiceR.Config;
 using VoiceR.Llm;
 using VoiceR.Model;
 using Windows.Foundation;
@@ -38,6 +41,17 @@ namespace VoiceR
             // Set window size
             var appWindow = this.AppWindow;
             appWindow.Resize(new Windows.Graphics.SizeInt32(1400, 800));
+            
+            // Populate model combo box
+            foreach (var model in OpenAIService.AvailableModels)
+            {
+                ModelComboBox.Items.Add(new ComboBoxItem
+                {
+                    Content = $"{model.Name} (${model.InputPricePerMillion} / ${model.OutputPricePerMillion})",
+                    Tag = model
+                });
+            }
+            ModelComboBox.SelectedIndex = 0;
             
             // Load UI tree when window is activated
             this.Activated += AnalyzeWindow_Activated;
@@ -552,15 +566,70 @@ namespace VoiceR
 
         #region Go Button
 
-        private void GoButton_Click(object sender, RoutedEventArgs e)
+        private async void GoButton_Click(object sender, RoutedEventArgs e)
         {
-            // TODO: Implement the Go button functionality
-            // This will process the prompt with the request JSON and populate the response
             var prompt = PromptTextBox.Text;
             var request = RequestJsonTextBox.Text;
-            
-            // Placeholder - will be implemented later
-            ResponseJsonTextBox.Text = "// Response will appear here after processing";
+
+            if (string.IsNullOrWhiteSpace(prompt))
+            {
+                ResponseJsonTextBox.Text = "Error: Please enter a prompt.";
+                return;
+            }
+
+            // Load config
+            var configService = new ConfigService();
+            var config = configService.Load();
+
+            if (string.IsNullOrWhiteSpace(config.OpenAiApiKey))
+            {
+                ResponseJsonTextBox.Text = "Error: OpenAI API key is not configured. Please set it in the Config window.";
+                return;
+            }
+
+            // Get selected model
+            var selectedItem = ModelComboBox.SelectedItem as ComboBoxItem;
+            var selectedModel = selectedItem?.Tag as OpenAIModel;
+            if (selectedModel == null)
+            {
+                ResponseJsonTextBox.Text = "Error: Please select a model.";
+                return;
+            }
+
+            // Show loading state
+            GoButton.IsEnabled = false;
+            ModelComboBox.IsEnabled = false;
+            ResponseJsonTextBox.Text = "Generating response...";
+            ResponseLabel.Text = "Response";
+
+            var stopwatch = Stopwatch.StartNew();
+
+            try
+            {
+                var openAiService = new OpenAIService(config.OpenAiApiKey, config.SystemPrompt);
+
+                // Combine request JSON with user prompt
+                var fullPrompt = string.IsNullOrWhiteSpace(request)
+                    ? prompt
+                    : $"Context (UI Element JSON):\n{request}\n\nUser Request:\n{prompt}";
+
+                var response = await openAiService.GenerateAsync(prompt, selectedModel);
+                
+                stopwatch.Stop();
+                ResponseLabel.Text = $"Response ({stopwatch.ElapsedMilliseconds}ms)";
+                ResponseJsonTextBox.Text = response;
+            }
+            catch (Exception ex)
+            {
+                stopwatch.Stop();
+                ResponseLabel.Text = $"Response ({stopwatch.ElapsedMilliseconds}ms)";
+                ResponseJsonTextBox.Text = $"Error: {ex.Message}";
+            }
+            finally
+            {
+                GoButton.IsEnabled = true;
+                ModelComboBox.IsEnabled = true;
+            }
         }
 
         #endregion

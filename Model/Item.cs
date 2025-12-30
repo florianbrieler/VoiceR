@@ -20,8 +20,7 @@ namespace VoiceR.Model
         public HashSet<Pattern> AvailablePatterns { get; set; } = [];
         public HashSet<Property> Properties { get; set; } = [];
 
-        private bool IsRedundant { get; set; } = false;
-
+        public LevelOfInformation LoI { get; set; } = LevelOfInformation.Unknown;
         public required AutomationElement Element;
 
         /// <summary>
@@ -93,10 +92,7 @@ namespace VoiceR.Model
             {
                 var parts = new List<string>();
 
-                if (IsRedundant)
-                {
-                    parts.Add("(Redundant)");
-                }
+                parts.Add(LoI.ToString());
 
                 // Always show control type (never empty)
                 parts.Add(ControlType);
@@ -126,14 +122,34 @@ namespace VoiceR.Model
             }
         }
 
-        public void CheckForRedundantItems() {
-            bool b = true;
+        public enum LevelOfInformation
+        {
+            Unknown,
+            Full,
+            Connector,
+            None
+        }
+
+        public void CheckLevelOfInformation() {
+            LevelOfInformation maxLoI = LevelOfInformation.None;
+
             foreach (Item child in Children)
             {
-                child.CheckForRedundantItems();
-                b = b && child.IsRedundant;
+                child.CheckLevelOfInformation();
+                if (child.LoI.CompareTo(maxLoI) < 0)
+                {
+                    maxLoI = child.LoI;
+                }
             }
-            IsRedundant = b && string.IsNullOrEmpty(Name) && AvailablePatterns.Count == 0;
+
+            if (!string.IsNullOrEmpty(Name) || AvailablePatterns.Count > 0) // ClassName as well?
+            {
+                LoI = LevelOfInformation.Full;
+            } else if (maxLoI == LevelOfInformation.Full) {
+                LoI = LevelOfInformation.Connector;
+            } else {
+                LoI = maxLoI;
+            }
         }
 
         private static string GenerateShortGuid()
