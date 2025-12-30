@@ -145,6 +145,45 @@ namespace VoiceR.Model
 
             return item;
         }
+
+        public Item CreateCompactCopy()
+        {
+            if (Root == null) {
+                throw new InvalidOperationException("Root is null");
+            }
+
+            Item compactCopyRoot = Item.FromItem(Root);
+
+            foreach (Item child in Root.GetChildren())
+            {
+                if (child.LoI == Item.LevelOfInformation.None) 
+                {
+                    continue;
+                }
+                compactCopyRoot.AddChildren(CreateCompactCopyChildren(child));
+            }
+            return compactCopyRoot;
+        }
+
+        private List<Item> CreateCompactCopyChildren(Item item)
+        {
+            List<Item> compactCopyChildren = [];
+            foreach (Item child in item.GetChildren())
+            {
+                if (child.LoI == Item.LevelOfInformation.None) 
+                {
+                    continue;
+                }
+                compactCopyChildren.AddRange(CreateCompactCopyChildren(child));
+            }
+            if (item.LoI != Item.LevelOfInformation.Full)
+            {
+                return compactCopyChildren;
+            }
+            Item copy = Item.FromItem(item);
+            copy.AddChildren(compactCopyChildren);
+            return [copy];
+        }
     }
 }
 

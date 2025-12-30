@@ -18,35 +18,51 @@
 
             <!-- Header with metrics -->
             <StackPanel Grid.Row="0" 
-                        Orientation="Horizontal" 
-                        Spacing="24"
+                        Orientation="Vertical" 
+                        Spacing="8"
                         Margin="0,0,0,12">
-                <!-- Retrieval Time -->
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock Text="Retrieval Time:" 
-                               FontWeight="SemiBold"
-                               VerticalAlignment="Center"/>
-                    <TextBlock x:Name="RetrievalTimeText" 
-                               Text="-- ms"
-                               VerticalAlignment="Center"/>
-                </StackPanel>
+                <!-- Metrics row -->
+                <StackPanel Orientation="Horizontal" 
+                            Spacing="24">
+                    <!-- Retrieval Time -->
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="Retrieval Time:" 
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock x:Name="RetrievalTimeText" 
+                                   Text="-- ms"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
 
-                <!-- Total Elements -->
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock Text="Total Elements:" 
-                               FontWeight="SemiBold"
-                               VerticalAlignment="Center"/>
-                    <TextBlock x:Name="TotalElementsText" 
-                               Text="--"
-                               VerticalAlignment="Center"/>
+                    <!-- Total Elements -->
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="Total Elements:" 
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock x:Name="TotalElementsText" 
+                                   Text="--"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
                 </StackPanel>
+                
+                <!-- Tree view toggle -->
+                <ToggleButton x:Name="TreeViewToggle"
+                              Content="Full tree"
+                              Click="TreeViewToggle_Click"
+                              Padding="12,6"/>
             </StackPanel>
 
             <!-- TreeView for UI elements -->
             <TreeView Grid.Row="1"
                       x:Name="UITreeView"
                       SelectionMode="Single"
-                      ContextRequested="TreeView_ContextRequested"/>
+                      ContextRequested="TreeView_ContextRequested">
+                <TreeView.ItemTemplate>
+                    <DataTemplate>
+                        <ContentPresenter Content="{Binding Content}"/>
+                    </DataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
         </Grid>
 
         <!-- Draggable Divider -->

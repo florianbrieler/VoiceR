@@ -70,10 +70,31 @@ namespace VoiceR.Model
             };
         }
 
+        public static Item FromItem(Item item)
+        {
+            return new Item
+            {
+                Id = item.Id,
+                ControlType = item.ControlType,
+                Name = item.Name,
+                AutomationId = item.AutomationId,
+                ClassName = item.ClassName,
+                HelpText = item.HelpText,
+                AvailablePatterns = [.. item.AvailablePatterns],
+                Properties = [.. item.Properties],
+                LoI = item.LoI,
+                Element = item.Element
+            };
+        }
 
         public void AddChild(Item child)
         {
             Children.Add(child);
+        }
+
+        public void AddChildren(IEnumerable<Item> children)
+        {
+            Children.AddRange(children);
         }
 
         public IEnumerable<Item> GetChildren()
@@ -92,31 +113,29 @@ namespace VoiceR.Model
             {
                 var parts = new List<string>();
 
-                parts.Add(LoI.ToString());
+                // parts.Add(LoI.ToString());
 
                 // Always show control type (never empty)
                 parts.Add(ControlType);
 
-                // Add name if present
+                List<string> details = [];
                 if (!string.IsNullOrEmpty(Name))
                 {
-                    parts.Add($": {Name}");
+                    details.Add($"name: {Name}");
                 }
-
-                // Add automation ID if present
                 if (!string.IsNullOrEmpty(AutomationId))
                 {
-                    parts.Add($"[{AutomationId}]");
+                    details.Add($"automation id: {AutomationId}");
                 }
-
-                // Add class name if present
                 if (!string.IsNullOrEmpty(ClassName))
                 {
-                    parts.Add($"({ClassName})");
+                    details.Add($"class name: {ClassName}");
                 }
+                parts.Add($"| details: {(details.Count > 0 ? string.Join(", ", details) : "-")}");
 
                 parts.Add($"| properties: {string.Join(", ", Properties)}");
                 parts.Add($"| patterns: {(AvailablePatterns.Count > 0 ? string.Join(", ", AvailablePatterns) : "-")}");
+                parts.Add($"| id: {Id}");
 
                 return string.Join(" ", parts);
             }

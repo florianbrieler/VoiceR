@@ -31,12 +31,16 @@ namespace VoiceR
         private TreeViewNode? _workingNode = null;
         private TreeViewItem? _workingTreeViewItem = null;
 
+        // ItemService and compact copy caching
+        private ItemService? _itemService = null;
+        private Item? _compactCopyRoot = null;
+
         public AnalyzeWindow()
         {
             this.InitializeComponent();
             
             // Set window title
-            Title = "VoiceR - UI Analysis";
+            Title = "VoiceR - Workbench";
             
             // Set window size
             var appWindow = this.AppWindow;
@@ -70,14 +74,14 @@ namespace VoiceR
             TotalElementsText.Text = "...";
 
             // Run the scan on a background thread to keep UI responsive
-            var itemService = await Task.Run(() => ItemService.Create());
+            _itemService = await Task.Run(() => ItemService.Create());
 
             // Update metrics
-            RetrievalTimeText.Text = $"{itemService.RetrievalTimeMs} ms";
-            TotalElementsText.Text = itemService.TotalItemCount.ToString("N0");
+            RetrievalTimeText.Text = $"{_itemService.RetrievalTimeMs} ms";
+            TotalElementsText.Text = _itemService.TotalItemCount.ToString("N0");
 
-            // Populate the tree view
-            PopulateTreeView(itemService.Root);
+            // Populate the tree view with full tree
+            PopulateTreeView(_itemService.Root);
         }
 
         private void PopulateTreeView(Item? rootNode)
@@ -101,9 +105,21 @@ namespace VoiceR
                 };
             }
 
+            // Create styled TextBlock based on LoI
+            var textBlock = new TextBlock { Text = node.DisplayText };
+
+            if (node.LoI == Item.LevelOfInformation.None)
+            {
+                textBlock.TextDecorations = Windows.UI.Text.TextDecorations.Strikethrough;
+            }
+            else if (node.LoI == Item.LevelOfInformation.Connector)
+            {
+                textBlock.Foreground = new SolidColorBrush(Microsoft.UI.Colors.LightGray);
+            }
+
             var treeViewNode = new TreeViewNode
             {
-                Content = node.DisplayText,
+                Content = textBlock,
                 IsExpanded = false // Initially collapsed
             };
 
@@ -150,28 +166,17 @@ namespace VoiceR
                             targetNode = node;
                             break;
                         }
+                        // If Content is a TextBlock, extract the text and use the reverse mapping
+                        else if (treeViewItem.Content is TextBlock textBlock)
+                        {
+                            var displayText = textBlock.Text;
+                            targetNode = FindNodeByDisplayText(displayText);
+                            if (targetNode != null) break;
+                        }
                         // If Content is a string (display text), use the reverse mapping
                         else if (treeViewItem.Content is string displayText)
                         {
-                            // Try exact match first
-                            if (_displayTextToNodeMap.TryGetValue(displayText, out var mappedNode))
-                            {
-                                targetNode = mappedNode;
-                                break;
-                            }
-                            
-                            // If exact match fails, try to find by matching the base display text
-                            // (handles the case where we added a suffix for uniqueness)
-                            foreach (var kvp in _displayTextToNodeMap)
-                            {
-                                var baseKey = kvp.Key.Contains('_') ? kvp.Key.Substring(0, kvp.Key.LastIndexOf('_')) : kvp.Key;
-                                if (baseKey == displayText || displayText == kvp.Key)
-                                {
-                                    targetNode = kvp.Value;
-                                    break;
-                                }
-                            }
-                            
+                            targetNode = FindNodeByDisplayText(displayText);
                             if (targetNode != null) break;
                         }
                         // Alternative: try to get from DataContext
@@ -193,6 +198,7 @@ namespace VoiceR
                 bool hasToggle = uiNode.IsPatternAvailable(Pattern.Toggle);
                 bool hasTransform = uiNode.IsPatternAvailable(Pattern.Transform);
                 bool hasWindow = uiNode.IsPatternAvailable(Pattern.Window);
+                bool hasFullLoI = uiNode.LoI == Item.LevelOfInformation.Full || uiNode == _compactCopyRoot || uiNode == _itemService.Root;
 
                 // Store the target node for menu item handlers
                 _contextMenuTargetNode = targetNode;
@@ -302,15 +308,18 @@ namespace VoiceR
                     needsSeparator = true;
                 }
 
-                // Group 7: Work with this node - Always available for any item
-                if (needsSeparator)
+                // Group 7: Work with this node
+                if (hasFullLoI)
                 {
-                    menuFlyout.Items.Add(new MenuFlyoutSeparator());
-                }
+                    if (needsSeparator)
+                    {
+                        menuFlyout.Items.Add(new MenuFlyoutSeparator());
+                    }
 
-                var workWithNodeItem = new MenuFlyoutItem { Text = "Work with this item" };
-                workWithNodeItem.Click += WorkWithNodeMenuItem_Click;
-                menuFlyout.Items.Add(workWithNodeItem);
+                    var workWithNodeItem = new MenuFlyoutItem { Text = "Work with this item" };
+                    workWithNodeItem.Click += WorkWithNodeMenuItem_Click;
+                    menuFlyout.Items.Add(workWithNodeItem);
+                }
                 
                 // Show the menu at the pointer position
                 if (sender is FrameworkElement frameworkElement)
@@ -497,6 +506,28 @@ namespace VoiceR
             return UITreeView.SelectedNode;
         }
 
+        private TreeViewNode? FindNodeByDisplayText(string displayText)
+        {
+            // Try exact match first
+            if (_displayTextToNodeMap.TryGetValue(displayText, out var mappedNode))
+            {
+                return mappedNode;
+            }
+            
+            // If exact match fails, try to find by matching the base display text
+            // (handles the case where we added a suffix for uniqueness)
+            foreach (var kvp in _displayTextToNodeMap)
+            {
+                var baseKey = kvp.Key.Contains('_') ? kvp.Key.Substring(0, kvp.Key.LastIndexOf('_')) : kvp.Key;
+                if (baseKey == displayText || displayText == kvp.Key)
+                {
+                    return kvp.Value;
+                }
+            }
+            
+            return null;
+        }
+
         #region Divider Drag Handling
 
         private void Divider_PointerPressed(object sender, PointerRoutedEventArgs e)
@@ -564,6 +595,37 @@ namespace VoiceR
 
         #endregion
 
+        #region Tree View Toggle
+
+        private void TreeViewToggle_Click(object sender, RoutedEventArgs e)
+        {
+            if (_itemService == null) return;
+
+            bool isCompactMode = TreeViewToggle.IsChecked == true;
+
+            if (isCompactMode)
+            {
+                // Switch to compact tree
+                TreeViewToggle.Content = "Compact tree";
+                
+                // Create compact copy on first request, then cache it
+                if (_compactCopyRoot == null)
+                {
+                    _compactCopyRoot = _itemService.CreateCompactCopy();
+                }
+                
+                PopulateTreeView(_compactCopyRoot);
+            }
+            else
+            {
+                // Switch to full tree
+                TreeViewToggle.Content = "Full tree";
+                PopulateTreeView(_itemService.Root);
+            }
+        }
+
+        #endregion
+
         #region Go Button
 
         private async void GoButton_Click(object sender, RoutedEventArgs e)
@@ -613,7 +675,7 @@ namespace VoiceR
                     ? prompt
                     : $"Context (UI Element JSON):\n{request}\n\nUser Request:\n{prompt}";
 
-                var response = await openAiService.GenerateAsync(prompt, selectedModel);
+                var response = await openAiService.GenerateAsync(fullPrompt, selectedModel);
                 
                 stopwatch.Stop();
                 ResponseLabel.Text = $"Response ({stopwatch.ElapsedMilliseconds}ms)";
