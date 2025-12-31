@@ -104,7 +104,7 @@ namespace VoiceR
                 // Create and show the analyze window on the UI thread
                 _mainWindow.DispatcherQueue.TryEnqueue(() =>
                 {
-                    var workbenchWindow = new AnalyzeWindow();
+                    var workbenchWindow = new WorkbenchWindow();
                     workbenchWindow.Activate();
                 });
             };

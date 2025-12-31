@@ -14,7 +14,7 @@ using Windows.Foundation;
 
 namespace VoiceR
 {
-    public sealed partial class AnalyzeWindow : Window
+    public sealed partial class WorkbenchWindow : Window
     {
         // Dictionary to map TreeViewNode to UIAutomationTreeNode
         private Dictionary<TreeViewNode, Item> _nodeMap = new Dictionary<TreeViewNode, Item>();
@@ -32,10 +32,9 @@ namespace VoiceR
         private TreeViewItem? _workingTreeViewItem = null;
 
         // ItemService and compact copy caching
-        private ItemService? _itemService = null;
-        private Item? _compactCopyRoot = null;
+        private AutomationService? _automationService = null;
 
-        public AnalyzeWindow()
+        public WorkbenchWindow()
         {
             this.InitializeComponent();
             
@@ -58,12 +57,12 @@ namespace VoiceR
             ModelComboBox.SelectedIndex = 0;
             
             // Load UI tree when window is activated
-            this.Activated += AnalyzeWindow_Activated;
+            this.Activated += WorkbenchWindow_Activated;
         }
 
         private bool _hasLoaded = false;
 
-        private async void AnalyzeWindow_Activated(object sender, WindowActivatedEventArgs args)
+        private async void WorkbenchWindow_Activated(object sender, WindowActivatedEventArgs args)
         {
             // Only load once
             if (_hasLoaded) return;
@@ -74,14 +73,15 @@ namespace VoiceR
             TotalElementsText.Text = "...";
 
             // Run the scan on a background thread to keep UI responsive
-            _itemService = await Task.Run(() => ItemService.Create());
+            _automationService = await Task.Run(() => AutomationService.Create());
+            await Task.Run(() => _automationService.UpdateCompactRoot());
 
             // Update metrics
-            RetrievalTimeText.Text = $"{_itemService.RetrievalTimeMs} ms";
-            TotalElementsText.Text = _itemService.TotalItemCount.ToString("N0");
+            RetrievalTimeText.Text = $"{_automationService.RetrievalTimeMs} ms";
+            TotalElementsText.Text = _automationService.TotalItemCount.ToString("N0");
 
             // Populate the tree view with full tree
-            PopulateTreeView(_itemService.Root);
+            PopulateTreeView(_automationService.Root);
         }
 
         private void PopulateTreeView(Item? rootNode)
@@ -198,7 +198,7 @@ namespace VoiceR
                 bool hasToggle = uiNode.IsPatternAvailable(Pattern.Toggle);
                 bool hasTransform = uiNode.IsPatternAvailable(Pattern.Transform);
                 bool hasWindow = uiNode.IsPatternAvailable(Pattern.Window);
-                bool hasFullLoI = uiNode.LoI == Item.LevelOfInformation.Full || uiNode == _compactCopyRoot || uiNode == _itemService.Root;
+                bool hasFullLoI = uiNode.LoI == Item.LevelOfInformation.Full || uiNode == _automationService.CompactRoot || uiNode == _automationService.Root;
 
                 // Store the target node for menu item handlers
                 _contextMenuTargetNode = targetNode;
@@ -463,7 +463,7 @@ namespace VoiceR
             var node = GetContextMenuTargetNode();
             if (node != null && _nodeMap.TryGetValue(node, out var uiNode))
             {
-                uiNode.Arrange(ItemActions.ArrangeState.Left);
+                uiNode.Arrange(Actions.ArrangeState.Left);
             }
         }
 
@@ -472,7 +472,7 @@ namespace VoiceR
             var node = GetContextMenuTargetNode();
             if (node != null && _nodeMap.TryGetValue(node, out var uiNode))
             {
-                uiNode.Arrange(ItemActions.ArrangeState.Right);
+                uiNode.Arrange(Actions.ArrangeState.Right);
             }
         }
 
@@ -481,7 +481,7 @@ namespace VoiceR
             var node = GetContextMenuTargetNode();
             if (node != null && _nodeMap.TryGetValue(node, out var uiNode))
             {
-                uiNode.Arrange(ItemActions.ArrangeState.Top);
+                uiNode.Arrange(Actions.ArrangeState.Top);
             }
         }
 
@@ -490,7 +490,7 @@ namespace VoiceR
             var node = GetContextMenuTargetNode();
             if (node != null && _nodeMap.TryGetValue(node, out var uiNode))
             {
-                uiNode.Arrange(ItemActions.ArrangeState.Bottom);
+                uiNode.Arrange(Actions.ArrangeState.Bottom);
             }
         }
 
@@ -599,7 +599,7 @@ namespace VoiceR
 
         private void TreeViewToggle_Click(object sender, RoutedEventArgs e)
         {
-            if (_itemService == null) return;
+            if (_automationService == null) return;
 
             bool isCompactMode = TreeViewToggle.IsChecked == true;
 
@@ -607,20 +607,13 @@ namespace VoiceR
             {
                 // Switch to compact tree
                 TreeViewToggle.Content = "Compact tree";
-                
-                // Create compact copy on first request, then cache it
-                if (_compactCopyRoot == null)
-                {
-                    _compactCopyRoot = _itemService.CreateCompactCopy();
-                }
-                
-                PopulateTreeView(_compactCopyRoot);
+                PopulateTreeView(_automationService.CompactRoot);
             }
             else
             {
                 // Switch to full tree
                 TreeViewToggle.Content = "Full tree";
-                PopulateTreeView(_itemService.Root);
+                PopulateTreeView(_automationService.Root);
             }
         }
 

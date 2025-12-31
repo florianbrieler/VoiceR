@@ -24,7 +24,7 @@ namespace VoiceR
             _trayIconService.Initialize();
 
             // Show Analyze window on startup
-            var analyzeWindow = new AnalyzeWindow();
+            var analyzeWindow = new WorkbenchWindow();
             analyzeWindow.Activate();
         }
 

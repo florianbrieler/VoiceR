@@ -8,7 +8,7 @@ namespace VoiceR.Model
     /// <summary>
     /// Service for retrieving UI elements using Microsoft UI Automation.
     /// </summary>
-    public class ItemService
+    public class AutomationService
     {
 
         public const int MaxDepth = 5;
@@ -19,6 +19,8 @@ namespace VoiceR.Model
         /// The root item of the UI tree.
         /// </summary>
         public Item? Root { get; private set; }
+
+        public Item? CompactRoot { get; private set; }
 
         /// <summary>
         /// Time taken to retrieve all UI elements in milliseconds.
@@ -49,9 +51,9 @@ namespace VoiceR.Model
         /// Creates a new ItemService instance by scanning the entire Windows UI tree.
         /// </summary>
         /// <returns>A new ItemService instance with scan results.</returns>
-        public static ItemService Create()
+        public static AutomationService Create()
         {
-            var service = new ItemService();
+            var service = new AutomationService();
             service.PerformScan();
             return service;
         }
@@ -146,13 +148,13 @@ namespace VoiceR.Model
             return item;
         }
 
-        public Item CreateCompactCopy()
+        public void UpdateCompactRoot()
         {
             if (Root == null) {
                 throw new InvalidOperationException("Root is null");
             }
 
-            Item compactCopyRoot = Item.FromItem(Root);
+            CompactRoot = Item.FromItem(Root);
 
             foreach (Item child in Root.GetChildren())
             {
@@ -160,9 +162,8 @@ namespace VoiceR.Model
                 {
                     continue;
                 }
-                compactCopyRoot.AddChildren(CreateCompactCopyChildren(child));
+                CompactRoot.AddChildren(CreateCompactCopyChildren(child));
             }
-            return compactCopyRoot;
         }
 
         private List<Item> CreateCompactCopyChildren(Item item)
