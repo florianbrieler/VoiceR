@@ -3,7 +3,8 @@ using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
+using VoiceR.Model;
+using VoiceR.Llm;
 
 namespace VoiceR
 {
@@ -11,11 +12,15 @@ namespace VoiceR
     {
         private NotifyIcon? _notifyIcon;
         private readonly Window _mainWindow;
+        private readonly AutomationService _automationService;
+        private readonly OpenAIService _openAIService;
         private bool _disposed = false;
 
-        public TrayIconService(Window mainWindow)
+        public TrayIconService(Window mainWindow, AutomationService automationService, OpenAIService openAIService)
         {
             _mainWindow = mainWindow;
+            _automationService = automationService;
+            _openAIService = openAIService;
         }
 
         public void Initialize()
@@ -104,7 +109,7 @@ namespace VoiceR
                 // Create and show the analyze window on the UI thread
                 _mainWindow.DispatcherQueue.TryEnqueue(() =>
                 {
-                    var workbenchWindow = new WorkbenchWindow();
+                    var workbenchWindow = new WorkbenchWindow(_automationService, _openAIService);
                     workbenchWindow.Activate();
                 });
             };

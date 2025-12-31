@@ -75,6 +75,7 @@ namespace VoiceR.Model
                 Root = CollectAllItems(rootElement, _itemById, ref itemCount);
                 TotalItemCount = itemCount;
                 Root.CheckLevelOfInformation();
+                UpdateCompactRoot();
             }
             catch (Exception ex)
             {

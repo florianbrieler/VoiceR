@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using OpenAI.Chat;
+using VoiceR.Config;
+using VoiceR.Model;
 
 namespace VoiceR.Llm
 {
@@ -20,6 +22,10 @@ namespace VoiceR.Llm
     {
         private readonly string _apiKey;
         private readonly string _systemPrompt;
+        private readonly AutomationService _automationService;
+
+        public OpenAIModel Model { get; set; }
+        public Item? Scope { get; set; }
 
         /// <summary>
         /// Available OpenAI models with input price less than $1.00 per 1M tokens (Standard tier pricing).
@@ -37,15 +43,20 @@ namespace VoiceR.Llm
             new OpenAIModel("gpt-3.5-turbo", 0.50m, 1.50m),
         };
 
-        /// <summary>
-        /// Creates a new instance of the OpenAIService.
-        /// </summary>
-        /// <param name="apiKey">The OpenAI API key.</param>
-        /// <param name="systemPrompt">The system prompt to use for all requests.</param>
-        public OpenAIService(string apiKey, string systemPrompt)
+//         public OpenAIService(string apiKey, string systemPrompt)
+        public OpenAIService(ConfigService configService, AutomationService automationService)
         {
-            _apiKey = apiKey ?? throw new ArgumentNullException(nameof(apiKey));
-            _systemPrompt = systemPrompt ?? string.Empty;
+            _automationService = automationService;
+
+            Model = AvailableModels[0];
+
+            var config = configService.Load();
+            _apiKey = config.OpenAiApiKey ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(_apiKey))
+            {
+                throw new InvalidOperationException("OpenAI API key is not configured.");
+            }
+            _systemPrompt = config.SystemPrompt ?? string.Empty;
 
             _systemPrompt = """
 You are a helpful assistant that can help with UI automation in Windows. As a context, you will get a json structure of the visual hierarchy of the UI.
@@ -81,30 +92,48 @@ You will return a json object with the actions to perform on the UI elements and
 """;
         }
 
+        public string ContextJson
+        {
+            get
+            {
+                Item? item = Scope ?? _automationService.CompactRoot ?? _automationService.Root;
+                if (item == null)
+                {
+                    throw new InvalidOperationException("No scope is set.");
+                }
+                return ItemJsonSerializer.ToJson(item);
+            }
+        }
+
         /// <summary>
         /// Generates a response from OpenAI based on the user prompt.
         /// </summary>
         /// <param name="userPrompt">The user's prompt text.</param>
-        /// <param name="model">The OpenAI model to use (e.g., "gpt-4o", "gpt-4o-mini").</param>
         /// <returns>The generated response text.</returns>
-        public async Task<string> GenerateAsync(string userPrompt, OpenAIModel model)
+        public async Task<string> GenerateAsync(string userPrompt)
         {
-            if (string.IsNullOrWhiteSpace(_apiKey))
-            {
-                throw new InvalidOperationException("OpenAI API key is not configured.");
-            }
+            ChatClient client = new ChatClient(Model.Name, _apiKey);
 
-            var client = new ChatClient(model.Name, _apiKey);
+            // Combine context with user prompt
+            string context = ContextJson;
+            string fullPrompt = string.IsNullOrWhiteSpace(context)
+                ? userPrompt
+                : $"Context (UI Element JSON):\n{context}\n\nUser Request:\n{userPrompt}";
 
-            var messages = new ChatMessage[]
+            ChatMessage[] messages = new ChatMessage[]
             {
                 new SystemChatMessage(_systemPrompt),
-                new UserChatMessage(userPrompt)
+                new UserChatMessage(fullPrompt)
             };
 
             var completion = await client.CompleteChatAsync(messages);
 
             return completion.Value.Content[0].Text;
+        }
+
+        public bool IsValidResponse(string response)
+        {
+            return ItemJsonSerializer.IsValidResponse(response);
         }
     }
 }

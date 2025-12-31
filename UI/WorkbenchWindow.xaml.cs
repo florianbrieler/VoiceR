@@ -32,9 +32,10 @@ namespace VoiceR
         private TreeViewItem? _workingTreeViewItem = null;
 
         // ItemService and compact copy caching
-        private AutomationService? _automationService = null;
+        private AutomationService _automationService;
+        private OpenAIService _openAIService;
 
-        public WorkbenchWindow()
+        public WorkbenchWindow(AutomationService automationService, OpenAIService openAIService)
         {
             this.InitializeComponent();
             
@@ -55,6 +56,9 @@ namespace VoiceR
                 });
             }
             ModelComboBox.SelectedIndex = 0;
+
+            _automationService = automationService;
+            _openAIService = openAIService;
             
             // Load UI tree when window is activated
             this.Activated += WorkbenchWindow_Activated;
@@ -62,19 +66,19 @@ namespace VoiceR
 
         private bool _hasLoaded = false;
 
-        private async void WorkbenchWindow_Activated(object sender, WindowActivatedEventArgs args)
+        private void WorkbenchWindow_Activated(object sender, WindowActivatedEventArgs args) // was: async
         {
             // Only load once
             if (_hasLoaded) return;
             _hasLoaded = true;
 
             // Show loading state
-            RetrievalTimeText.Text = "Scanning...";
-            TotalElementsText.Text = "...";
+            // RetrievalTimeText.Text = "Scanning...";
+            // TotalElementsText.Text = "...";
 
             // Run the scan on a background thread to keep UI responsive
-            _automationService = await Task.Run(() => AutomationService.Create());
-            await Task.Run(() => _automationService.UpdateCompactRoot());
+            // _automationService = await Task.Run(() => AutomationService.Create());
+            // await Task.Run(() => _automationService.UpdateCompactRoot());
 
             // Update metrics
             RetrievalTimeText.Text = $"{_automationService.RetrievalTimeMs} ms";
@@ -623,26 +627,15 @@ namespace VoiceR
 
         private async void GoButton_Click(object sender, RoutedEventArgs e)
         {
-            var prompt = PromptTextBox.Text;
-            var request = RequestJsonTextBox.Text;
-
+            // get prompt
+            string prompt = PromptTextBox.Text;
             if (string.IsNullOrWhiteSpace(prompt))
             {
                 ResponseJsonTextBox.Text = "Error: Please enter a prompt.";
                 return;
             }
 
-            // Load config
-            var configService = new ConfigService();
-            var config = configService.Load();
-
-            if (string.IsNullOrWhiteSpace(config.OpenAiApiKey))
-            {
-                ResponseJsonTextBox.Text = "Error: OpenAI API key is not configured. Please set it in the Config window.";
-                return;
-            }
-
-            // Get selected model
+            // get selected model
             var selectedItem = ModelComboBox.SelectedItem as ComboBoxItem;
             var selectedModel = selectedItem?.Tag as OpenAIModel;
             if (selectedModel == null)
@@ -651,24 +644,20 @@ namespace VoiceR
                 return;
             }
 
-            // Show loading state
+            // show loading state
             GoButton.IsEnabled = false;
             ModelComboBox.IsEnabled = false;
             ResponseJsonTextBox.Text = "Generating response...";
             ResponseLabel.Text = "Response";
 
-            var stopwatch = Stopwatch.StartNew();
+            Stopwatch stopwatch = Stopwatch.StartNew();
 
+            // generate response
             try
             {
-                var openAiService = new OpenAIService(config.OpenAiApiKey, config.SystemPrompt);
-
-                // Combine request JSON with user prompt
-                var fullPrompt = string.IsNullOrWhiteSpace(request)
-                    ? prompt
-                    : $"Context (UI Element JSON):\n{request}\n\nUser Request:\n{prompt}";
-
-                var response = await openAiService.GenerateAsync(fullPrompt, selectedModel);
+                _openAIService.Model = selectedModel;
+                _openAIService.Scope = _workingNode != null ? _nodeMap[_workingNode] : null;
+                string response = await _openAIService.GenerateAsync(prompt);
                 
                 stopwatch.Stop();
                 ResponseLabel.Text = $"Response ({stopwatch.ElapsedMilliseconds}ms)";

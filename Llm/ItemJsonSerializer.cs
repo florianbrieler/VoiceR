@@ -35,6 +35,49 @@ namespace VoiceR.Llm
             return JsonSerializer.Serialize(dto, _jsonOptions);
         }
 
+        public static bool IsValidResponse(string response)
+        {
+            // Determines if the response is a valid LLM JSON result
+            if (string.IsNullOrWhiteSpace(response))
+                return false;
+
+            try
+            {
+                // Parse as JsonDocument
+                using var doc = JsonDocument.Parse(response);
+                var root = doc.RootElement;
+
+                // Expect object root with "actions" property that is an array
+                if (root.ValueKind != JsonValueKind.Object)
+                    return false;
+
+                if (!root.TryGetProperty("actions", out var actionsElement))
+                    return false;
+
+                if (actionsElement.ValueKind != JsonValueKind.Array)
+                    return false;
+
+                // check the structure of the actions
+                foreach (var action in actionsElement.EnumerateArray())
+                {
+                    if (action.ValueKind != JsonValueKind.Object)
+                        return false;
+
+                    // Check for required properties ("id", "action", "params")
+                    if (!action.TryGetProperty("id", out var _) ||
+                        !action.TryGetProperty("action", out var _) ||
+                        !action.TryGetProperty("params", out var _))
+                        return false;
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private static ItemDto ConvertToDto(Item item)
         {
             var id = item.Id;

@@ -1,11 +1,13 @@
 using Microsoft.UI.Xaml;
+using VoiceR.Config;
+using VoiceR.Llm;
+using VoiceR.Model;
 
 namespace VoiceR
 {
     public partial class App : Application
     {
         private MainWindow? _mainWindow;
-        private TrayIconService? _trayIconService;
 
         public App()
         {
@@ -14,20 +16,23 @@ namespace VoiceR
 
         protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
         {
-            _mainWindow = new MainWindow();
+            // dependencies
+            ConfigService configService = new ConfigService();
+            AutomationService automationService = AutomationService.Create();
+            OpenAIService openAIService = new OpenAIService(configService, automationService);
             
-            // Hide the window immediately before it can be shown
+            // main window, currently unused
+            _mainWindow = new MainWindow();
             _mainWindow.AppWindow.Hide();
 
-            // Initialize tray icon service
-            _trayIconService = new TrayIconService(_mainWindow);
-            _trayIconService.Initialize();
+            // tray icon
+            TrayIconService trayIconService = new TrayIconService(_mainWindow, automationService, openAIService);
+            trayIconService.Initialize();
 
-            // Show Analyze window on startup
-            var analyzeWindow = new WorkbenchWindow();
-            analyzeWindow.Activate();
+            // workbench window
+            var workbenchWindow = new WorkbenchWindow(automationService, openAIService);
+            workbenchWindow.Activate();
         }
-
     }
 }
 
