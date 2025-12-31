@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using VoiceR.Config;
+using VoiceR.UI;
 
 namespace VoiceR
 {
@@ -12,6 +13,9 @@ namespace VoiceR
             this.InitializeComponent();
 
             Title = "VoiceR - Configuration";
+
+            // Set window icon
+            IconHelper.SetWindowIcon(this);
 
             // Set window size
             var appWindow = this.AppWindow;

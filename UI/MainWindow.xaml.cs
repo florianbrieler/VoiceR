@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using VoiceR.UI;
 
 namespace VoiceR
 {
@@ -7,6 +8,9 @@ namespace VoiceR
         public MainWindow()
         {
             this.InitializeComponent();
+            
+            // Set window icon
+            IconHelper.SetWindowIcon(this);
         }
     }
 }

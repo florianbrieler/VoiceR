@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml.Media;
 using VoiceR.Config;
 using VoiceR.Llm;
 using VoiceR.Model;
+using VoiceR.UI;
 using Windows.Foundation;
 
 namespace VoiceR
@@ -41,6 +42,9 @@ namespace VoiceR
             
             // Set window title
             Title = "VoiceR - Workbench";
+            
+            // Set window icon
+            IconHelper.SetWindowIcon(this);
             
             // Set window size
             var appWindow = this.AppWindow;

@@ -8,6 +8,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using VoiceR.UI;
 using Whisper.net;
 using Whisper.net.Ggml;
 
@@ -45,6 +46,9 @@ namespace VoiceR
             this.InitializeComponent();
             
             Title = "VoiceR - Voice Transcription";
+            
+            // Set window icon
+            IconHelper.SetWindowIcon(this);
             
             var appWindow = this.AppWindow;
             appWindow.Resize(new Windows.Graphics.SizeInt32(700, 500));
