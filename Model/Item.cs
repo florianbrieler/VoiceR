@@ -113,23 +113,21 @@ namespace VoiceR.Model
             {
                 var parts = new List<string>();
 
-                // parts.Add(LoI.ToString());
-
                 // Always show control type (never empty)
                 parts.Add(ControlType);
 
                 List<string> details = [];
                 if (!string.IsNullOrEmpty(Name))
                 {
-                    details.Add($"name: {Name}");
+                    details.Add($"{Name}");
                 }
                 if (!string.IsNullOrEmpty(AutomationId))
                 {
-                    details.Add($"automation id: {AutomationId}");
+                    details.Add($"{AutomationId}");
                 }
                 if (!string.IsNullOrEmpty(ClassName))
                 {
-                    details.Add($"class name: {ClassName}");
+                    details.Add($"{ClassName}");
                 }
                 parts.Add($"| details: {(details.Count > 0 ? string.Join(", ", details) : "-")}");
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using OpenAI.Chat;
 using VoiceR.Config;
@@ -43,7 +44,6 @@ namespace VoiceR.Llm
             new OpenAIModel("gpt-3.5-turbo", 0.50m, 1.50m),
         };
 
-//         public OpenAIService(string apiKey, string systemPrompt)
         public OpenAIService(ConfigService configService, AutomationService automationService)
         {
             _automationService = automationService;
@@ -109,8 +109,7 @@ You will return a json object with the actions to perform on the UI elements and
         /// Generates a response from OpenAI based on the user prompt.
         /// </summary>
         /// <param name="userPrompt">The user's prompt text.</param>
-        /// <returns>The generated response text.</returns>
-        public async Task<string> GenerateAsync(string userPrompt)
+        public async Task<LlmResult> GenerateAsync(string userPrompt)
         {
             ChatClient client = new ChatClient(Model.Name, _apiKey);
 
@@ -119,16 +118,29 @@ You will return a json object with the actions to perform on the UI elements and
             string fullPrompt = string.IsNullOrWhiteSpace(context)
                 ? userPrompt
                 : $"Context (UI Element JSON):\n{context}\n\nUser Request:\n{userPrompt}";
-
             ChatMessage[] messages = new ChatMessage[]
             {
                 new SystemChatMessage(_systemPrompt),
                 new UserChatMessage(fullPrompt)
             };
 
-            var completion = await client.CompleteChatAsync(messages);
+            // call the LLM
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            var completion = await client.CompleteChatAsync(messages); 
+            stopwatch.Stop();
 
-            return completion.Value.Content[0].Text;
+            // prepare result
+            ChatCompletion? content = completion.Value;
+            LlmResult result = new LlmResult();
+            result.Prompt = fullPrompt;
+            result.Response = content.Content[0].Text;
+            result.InputTokens = content.Usage.InputTokenCount;
+            result.OutputTokens = content.Usage.OutputTokenCount;
+            result.EstimatedInputPriceUSD = result.InputTokens * Model.InputPricePerMillion / 1000000;
+            result.EstimatedOutputPriceUSD = result.OutputTokens * Model.OutputPricePerMillion / 1000000;
+            result.ElapsedMilliseconds = stopwatch.ElapsedMilliseconds;
+
+            return result;
         }
 
         public bool IsValidResponse(string response)

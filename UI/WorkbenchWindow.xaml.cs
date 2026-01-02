@@ -631,6 +631,9 @@ namespace VoiceR
 
         private async void GoButton_Click(object sender, RoutedEventArgs e)
         {
+            ExecuteButton.IsEnabled = false;
+            ResponseDetails.Visibility = Visibility.Collapsed;
+
             // get prompt
             string prompt = PromptTextBox.Text;
             if (string.IsNullOrWhiteSpace(prompt))
@@ -652,25 +655,22 @@ namespace VoiceR
             GoButton.IsEnabled = false;
             ModelComboBox.IsEnabled = false;
             ResponseJsonTextBox.Text = "Generating response...";
-            ResponseLabel.Text = "Response";
-
-            Stopwatch stopwatch = Stopwatch.StartNew();
 
             // generate response
             try
             {
-                _openAIService.Model = selectedModel;
+                _openAIService.Model = selectedModel;   
                 _openAIService.Scope = _workingNode != null ? _nodeMap[_workingNode] : null;
-                string response = await _openAIService.GenerateAsync(prompt);
+                LlmResult result = await _openAIService.GenerateAsync(prompt);
                 
-                stopwatch.Stop();
-                ResponseLabel.Text = $"Response ({stopwatch.ElapsedMilliseconds}ms)";
-                ResponseJsonTextBox.Text = response;
+                ResponseDetails.Text = $"Input tokens: {result.InputTokens} (est. ${result.EstimatedInputPriceUSD})\nOutput tokens: ${result.OutputTokens} (est. ${result.EstimatedOutputPriceUSD})\nDuration: {result.ElapsedMilliseconds}ms";
+                ResponseDetails.Visibility = Visibility.Visible;
+                ResponseJsonTextBox.Text = result.Response;
+                ExecuteButton.IsEnabled = true;
             }
             catch (Exception ex)
             {
-                stopwatch.Stop();
-                ResponseLabel.Text = $"Response ({stopwatch.ElapsedMilliseconds}ms)";
+                ResponseDetails.Text = "";
                 ResponseJsonTextBox.Text = $"Error: {ex.Message}";
             }
             finally
@@ -678,6 +678,15 @@ namespace VoiceR
                 GoButton.IsEnabled = true;
                 ModelComboBox.IsEnabled = true;
             }
+        }
+
+        #endregion
+
+        #region Execute Button
+
+        private void ExecuteButton_Click(object sender, RoutedEventArgs e)
+        {
+            // TODO: Implement execute functionality
         }
 
         #endregion
