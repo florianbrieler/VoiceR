@@ -172,6 +172,7 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
                 
                 <TextBlock Grid.Row="0"
@@ -189,7 +190,7 @@
                 <ScrollViewer Grid.Row="2"
                               VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Auto">
-                    <TextBox x:Name="ResponseJsonTextBox"
+                    <TextBox x:Name="ResponseTextBox"
                              IsReadOnly="True"
                              TextWrapping="NoWrap"
                              AcceptsReturn="True"
@@ -201,7 +202,12 @@
                              BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"/>
                 </ScrollViewer>
                 
-                <Button Grid.Row="3"
+                <TextBlock Grid.Row="3"
+                           x:Name="ResponseErrors"
+                           Text="-"
+                           Margin="0,8,0,0"/>
+                
+                <Button Grid.Row="4"
                         x:Name="ExecuteButton"
                         Content="Execute"
                         Padding="24,8"

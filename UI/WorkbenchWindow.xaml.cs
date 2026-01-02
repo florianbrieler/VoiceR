@@ -32,14 +32,20 @@ namespace VoiceR
         private TreeViewNode? _workingNode = null;
         private TreeViewItem? _workingTreeViewItem = null;
 
-        // ItemService and compact copy caching
-        private AutomationService _automationService;
-        private OpenAIService _openAIService;
+        // dependencies
+        private readonly AutomationService _automationService;
+        private readonly ILlmService _llmService;
 
-        public WorkbenchWindow(AutomationService automationService, OpenAIService openAIService)
+        private LlmResult? _lastLlmResult = null;
+
+        public WorkbenchWindow(AutomationService automationService, ILlmService llmService)
         {
             this.InitializeComponent();
-            
+
+            // set dependencies
+            _automationService = automationService;
+            _llmService = llmService;
+
             // Set window title
             Title = "VoiceR - Workbench";
             
@@ -51,7 +57,7 @@ namespace VoiceR
             appWindow.Resize(new Windows.Graphics.SizeInt32(1400, 800));
             
             // Populate model combo box
-            foreach (var model in OpenAIService.AvailableModels)
+            foreach (var model in _llmService.AvailableModels)
             {
                 ModelComboBox.Items.Add(new ComboBoxItem
                 {
@@ -61,9 +67,6 @@ namespace VoiceR
             }
             ModelComboBox.SelectedIndex = 0;
 
-            _automationService = automationService;
-            _openAIService = openAIService;
-            
             // Load UI tree when window is activated
             this.Activated += WorkbenchWindow_Activated;
         }
@@ -428,14 +431,14 @@ namespace VoiceR
         private void WorkWithNodeMenuItem_Click(object sender, RoutedEventArgs e)
         {
             var node = GetContextMenuTargetNode();
-            if (node != null && _nodeMap.TryGetValue(node, out var uiNode))
+            if (node != null && _nodeMap.TryGetValue(node, out Item? uiNode) && uiNode != null)
             {
                 // Clear previous highlight
                 ClearWorkingNodeHighlight();
 
-                // Serialize the item to JSON and display in Request pane
-                string json = ItemJsonSerializer.ToJson(uiNode);
-                RequestJsonTextBox.Text = json;
+                // Serialize the item and display in Request pane
+                _llmService.Scope = uiNode;
+                RequestJsonTextBox.Text = _llmService.SerializedContext;
 
                 // Store and highlight the working node
                 _workingNode = node;
@@ -638,40 +641,48 @@ namespace VoiceR
             string prompt = PromptTextBox.Text;
             if (string.IsNullOrWhiteSpace(prompt))
             {
-                ResponseJsonTextBox.Text = "Error: Please enter a prompt.";
+                ResponseTextBox.Text = "Error: Please enter a prompt.";
                 return;
             }
 
             // get selected model
-            var selectedItem = ModelComboBox.SelectedItem as ComboBoxItem;
-            var selectedModel = selectedItem?.Tag as OpenAIModel;
+            ComboBoxItem? selectedItem = ModelComboBox.SelectedItem as ComboBoxItem;
+            if (selectedItem == null)
+            {
+                ResponseTextBox.Text = "Error: Please select a model.";
+                return;
+            }
+            LargeLanguageModel? selectedModel = selectedItem.Tag as LargeLanguageModel;
             if (selectedModel == null)
             {
-                ResponseJsonTextBox.Text = "Error: Please select a model.";
+                ResponseTextBox.Text = "Error: Please select a model.";
                 return;
             }
 
             // show loading state
             GoButton.IsEnabled = false;
             ModelComboBox.IsEnabled = false;
-            ResponseJsonTextBox.Text = "Generating response...";
+            ResponseTextBox.Text = "Generating response...";
 
             // generate response
             try
             {
-                _openAIService.Model = selectedModel;   
-                _openAIService.Scope = _workingNode != null ? _nodeMap[_workingNode] : null;
-                LlmResult result = await _openAIService.GenerateAsync(prompt);
+                _llmService.Model = selectedModel;   
+                _llmService.Scope = _workingNode != null ? _nodeMap[_workingNode] : null;
+                LlmResult result = await _llmService.GenerateAsync(prompt);
                 
                 ResponseDetails.Text = $"Input tokens: {result.InputTokens} (est. ${result.EstimatedInputPriceUSD})\nOutput tokens: ${result.OutputTokens} (est. ${result.EstimatedOutputPriceUSD})\nDuration: {result.ElapsedMilliseconds}ms";
                 ResponseDetails.Visibility = Visibility.Visible;
-                ResponseJsonTextBox.Text = result.Response;
-                ExecuteButton.IsEnabled = true;
+                ResponseTextBox.Text = result.Response;
+                ResponseErrors.Text = result.Errors.Count > 0 ? string.Join("\n", result.Errors) : $"no errors, extracted {result.Actions.Count} action(s)";
+                ExecuteButton.IsEnabled = result.Errors.Count == 0;
+
+                _lastLlmResult = result;
             }
             catch (Exception ex)
             {
                 ResponseDetails.Text = "";
-                ResponseJsonTextBox.Text = $"Error: {ex.Message}";
+                ResponseTextBox.Text = $"Error: {ex.Message}";
             }
             finally
             {
@@ -686,7 +697,15 @@ namespace VoiceR
 
         private void ExecuteButton_Click(object sender, RoutedEventArgs e)
         {
-            // TODO: Implement execute functionality
+            if (_lastLlmResult == null)
+            {
+                return;
+            }
+
+            foreach (Action action in _lastLlmResult.Actions)
+            {
+                action();
+            }
         }
 
         #endregion

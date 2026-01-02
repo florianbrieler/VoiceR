@@ -325,6 +325,109 @@ namespace VoiceR.Model
 
             return pattern;
         }
+
+        public static Action CreateActionFromStrings(this Item item, string action, string[] parameters)
+        {
+            switch (action.ToLower())
+            {
+                case "expandorcollapse":
+                    CheckIfPatternIsAvailable(item, Pattern.ExpandCollapse);
+                    CheckIfParametersAreValid(action, parameters, 1);
+                    ExpandCollapseState staEC = GetExpandCollapseState(parameters[0], action);
+                    return () => { item.ExpandOrCollapse(staEC); };
+                case "invoke":
+                    CheckIfPatternIsAvailable(item, Pattern.Invoke);
+                    CheckIfParametersAreValid(action, parameters, 0);
+                    return () => { item.Invoke(); };
+                case "toggle":
+                    CheckIfPatternIsAvailable(item, Pattern.Toggle);
+                    CheckIfParametersAreValid(action, parameters, 0);
+                    return () => { item.Toggle(); };
+                case "arrange":
+                    CheckIfPatternIsAvailable(item, Pattern.Transform);
+                    CheckIfParametersAreValid(action, parameters, 1);
+                    ArrangeState staAr = GetArrangeState(parameters[0], action);
+                    return () => { item.Arrange(staAr); };
+                case "setvalue":
+                    CheckIfPatternIsAvailable(item, Pattern.Value);
+                    CheckIfParametersAreValid(action, parameters, 1);
+                    return () => { item.SetValue(parameters[0]); };
+                case "setwindowvisualstate":
+                    CheckIfPatternIsAvailable(item, Pattern.Window);
+                    CheckIfParametersAreValid(action, parameters, 1);
+                    WindowVisualState staWin = GetWindowVisualState(parameters[0], action);
+                    return () => { item.SetWindowVisualState(staWin); };
+                case "closewindow":
+                    CheckIfPatternIsAvailable(item, Pattern.Window);
+                    CheckIfParametersAreValid(action, parameters, 0);
+                    return () => { item.CloseWindow(); };
+                default:
+                    throw new InvalidOperationException($"Invalid action: {action}");
+            }
+        }
+
+        private static void CheckIfPatternIsAvailable(Item item, Pattern pattern)
+        {
+            if (!item.AvailablePatterns.Contains(pattern))
+            {
+                throw new InvalidOperationException($"{pattern} is not available for item");
+            }
+        }
+
+        private static void CheckIfParametersAreValid(string action, string[] parameters, int requiredParameters)
+        {
+            if (parameters.Length != requiredParameters)
+            {
+                throw new InvalidOperationException($"{action} requires {requiredParameters} parameters, but {parameters.Length} were provided");
+            }
+        }
+
+        private static ExpandCollapseState GetExpandCollapseState(string str, String action)
+        {
+            switch (str.ToLower())
+            {
+                case "expanded":
+                    return ExpandCollapseState.Expanded;
+                case "collapsed":
+                    return ExpandCollapseState.Collapsed;
+                default:
+                    throw new InvalidOperationException($"Invalid parameter for {action}: {str}");
+            }
+        }
+
+        private static ArrangeState GetArrangeState(string str, String action)
+        {
+            switch (str.ToLower())
+            {
+                case "left":
+                    return ArrangeState.Left;
+                case "right":
+                    return ArrangeState.Right;
+                case "top":
+                    return ArrangeState.Top;
+                case "bottom":
+                    return ArrangeState.Bottom;
+                case "center":
+                    return ArrangeState.Center;
+                default:
+                    throw new InvalidOperationException($"Invalid parameter for {action}: {str}");
+            }
+        }
+
+        private static WindowVisualState GetWindowVisualState(string str, String action)
+        {
+            switch (str.ToLower())
+            {
+                case "maximized":
+                    return WindowVisualState.Maximized;
+                case "minimized":
+                    return WindowVisualState.Minimized;
+                case "normal":
+                    return WindowVisualState.Normal;
+                default:
+                    throw new InvalidOperationException($"Invalid parameter for {action}: {str}");
+            }
+        }
     }
 }
 

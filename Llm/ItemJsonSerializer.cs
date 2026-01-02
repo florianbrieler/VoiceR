@@ -10,7 +10,7 @@ namespace VoiceR.Llm
     /// <summary>
     /// Serializes Item objects to JSON representation for LLM consumption.
     /// </summary>
-    public static class ItemJsonSerializer
+    public class ItemJsonSerializer : ISerDe
     {
         private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
         {
@@ -19,12 +19,21 @@ namespace VoiceR.Llm
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
 
+        private AutomationService _automationService;
+
+        public ItemJsonSerializer(AutomationService automationService)
+        {
+            _automationService = automationService;
+        }
+
+        public string Format => "json";
+
         /// <summary>
         /// Converts an Item to a JSON string representation.
         /// </summary>
         /// <param name="item">The Item to serialize.</param>
         /// <returns>A formatted JSON string.</returns>
-        public static string ToJson(Item item)
+        public string Serialize(Item item)
         {
             if (item == null)
             {
@@ -35,46 +44,150 @@ namespace VoiceR.Llm
             return JsonSerializer.Serialize(dto, _jsonOptions);
         }
 
-        public static bool IsValidResponse(string response)
+        public void ExtractActionsFromResponse(string response, out List<Action> actions, out List<string> errors)
         {
-            // Determines if the response is a valid LLM JSON result
+            JsonElement root;
+            JsonElement actionsElement;
+
+            actions = [];
+            errors = [];
+
+            // check if response is empty
             if (string.IsNullOrWhiteSpace(response))
-                return false;
+            {
+                errors.Add("Response is empty");
+                return;
+            }
 
             try
             {
-                // Parse as JsonDocument
-                using var doc = JsonDocument.Parse(response);
-                var root = doc.RootElement;
+                // parse response as Json
+                using JsonDocument doc = JsonDocument.Parse(response);
+                root = doc.RootElement;
 
-                // Expect object root with "actions" property that is an array
-                if (root.ValueKind != JsonValueKind.Object)
-                    return false;
+                // expect object root with "actions" property that is an array
+                try {
+                    if (root.ValueKind != JsonValueKind.Object)
+                    {
+                        errors.Add("the response is not an object");
+                        return;
+                    }
 
-                if (!root.TryGetProperty("actions", out var actionsElement))
-                    return false;
+                    if (!root.TryGetProperty("actions", out actionsElement))
+                    {
+                        errors.Add("there is no actions property in the response");
+                        return;
+                    }
 
-                if (actionsElement.ValueKind != JsonValueKind.Array)
-                    return false;
-
-                // check the structure of the actions
-                foreach (var action in actionsElement.EnumerateArray())
+                    if (actionsElement.ValueKind != JsonValueKind.Array)
+                    {
+                        errors.Add("actions is not an array");
+                        return;
+                    }
+                }
+                catch (Exception ex)
                 {
-                    if (action.ValueKind != JsonValueKind.Object)
-                        return false;
-
-                    // Check for required properties ("id", "action", "params")
-                    if (!action.TryGetProperty("id", out var _) ||
-                        !action.TryGetProperty("action", out var _) ||
-                        !action.TryGetProperty("params", out var _))
-                        return false;
+                    errors.Add($"Error extracting actions from response: {ex.Message}");
+                    return;
                 }
 
-                return true;
+                // check the actions and convert
+                int index = 0;
+                foreach (JsonElement child in actionsElement.EnumerateArray())
+                {
+                    if (child.ValueKind != JsonValueKind.Object)
+                    {
+                        errors.Add($"action #{index}: is not an object");
+                        continue;
+                    }
+
+                    string id;
+                    string actionString;
+                    List<string> parameters = [];
+                    JsonElement paramsElement;
+
+                    // get id
+                    try {
+                        string? s = child.GetProperty("id").GetString();
+                        if (string.IsNullOrWhiteSpace(s))
+                        {
+                            errors.Add($"action #{index}: id is empty");
+                            continue;
+                        }
+                        id = s;
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"action #{index}: cannot retrieve id: {ex.Message}");
+                        continue;
+                    }
+
+                    // get action
+                    try {
+                        string? s = child.GetProperty("action").GetString();
+                        if (string.IsNullOrWhiteSpace(s))
+                        {
+                            errors.Add($"action #{index}: action is empty");
+                            continue;
+                        }
+                        actionString = s;
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"action #{index}: cannot retrieve action: {ex.Message}");
+                        continue;
+                    }
+
+                    // get params
+                    if (child.TryGetProperty("params", out paramsElement))
+                    {
+                        try {
+                            if (paramsElement.ValueKind != JsonValueKind.Array)
+                            {
+                                errors.Add($"action #{index}: params is not an array");
+                                continue;
+                            }
+                            foreach (JsonElement param in paramsElement.EnumerateArray())
+                            {
+                                if (param.ValueKind != JsonValueKind.String)
+                                {
+                                    errors.Add($"action #{index}: param is not a string");
+                                    continue;
+                                }
+                                string? s = param.GetString();
+                                if (string.IsNullOrWhiteSpace(s))
+                                {
+                                    errors.Add($"action #{index}: param has no value");
+                                    continue;
+                                }
+                                parameters.Add(s);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            errors.Add($"action #{index}: cannot retrieve action: {ex.Message}");
+                            continue;
+                        }
+                    }
+
+                    // create action
+                    try
+                    {
+                        Item item = _automationService.GetItemForId(id);
+                        Action action = item.CreateActionFromStrings(actionString, parameters.ToArray());
+                        actions.Add(action);
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"action #{index}: {ex.Message}");
+                        return;
+                    }
+                }
             }
-            catch
+            catch (Exception ex)
             {
-                return false;
+                errors.Add($"Error parsing response as Json: {ex.Message}");
+                return;
             }
         }
 

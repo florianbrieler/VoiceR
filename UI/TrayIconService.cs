@@ -11,12 +11,14 @@ namespace VoiceR
     public class TrayIconService : IDisposable
     {
         private NotifyIcon? _notifyIcon;
-        private readonly Window _mainWindow;
-        private readonly AutomationService _automationService;
-        private readonly OpenAIService _openAIService;
         private bool _disposed = false;
 
-        public TrayIconService(Window mainWindow, AutomationService automationService, OpenAIService openAIService)
+        // dependencies
+        private readonly Window _mainWindow;
+        private readonly AutomationService _automationService;
+        private readonly ILlmService _openAIService;
+
+        public TrayIconService(Window mainWindow, AutomationService automationService, ILlmService openAIService)
         {
             _mainWindow = mainWindow;
             _automationService = automationService;

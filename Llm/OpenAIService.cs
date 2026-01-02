@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading.Tasks;
 using OpenAI.Chat;
 using VoiceR.Config;
@@ -8,45 +9,39 @@ using VoiceR.Model;
 
 namespace VoiceR.Llm
 {
-    /// <summary>
-    /// Represents an OpenAI model with its pricing information.
-    /// </summary>
-    /// <param name="Name">The model identifier.</param>
-    /// <param name="InputPricePerMillion">Input price per 1M tokens in USD.</param>
-    /// <param name="OutputPricePerMillion">Output price per 1M tokens in USD.</param>
-    public record OpenAIModel(string Name, decimal InputPricePerMillion, decimal OutputPricePerMillion);
 
     /// <summary>
     /// Service for interacting with OpenAI's chat completion API.
     /// </summary>
-    public class OpenAIService
+    public class OpenAIService : ILlmService
     {
         private readonly string _apiKey;
         private readonly string _systemPrompt;
-        private readonly AutomationService _automationService;
 
-        public OpenAIModel Model { get; set; }
-        public Item? Scope { get; set; }
+        private string? _serializedContext = null;
 
-        /// <summary>
-        /// Available OpenAI models with input price less than $1.00 per 1M tokens (Standard tier pricing).
-        /// </summary>
-        /// <see cref="https://platform.openai.com/docs/pricing?latest-pricing=standard"/>
-        public static readonly IReadOnlyList<OpenAIModel> AvailableModels = new List<OpenAIModel>
+        // from interface
+        public LargeLanguageModel Model { get; set; }
+        private Item? _scope = null;
+        public Item? Scope
         {
-            new OpenAIModel("gpt-5-mini", 0.25m, 2.00m),
-            new OpenAIModel("gpt-5-nano", 0.05m, 0.40m),
-            new OpenAIModel("gpt-5", 1.25m, 10.00m),
-            new OpenAIModel("gpt-4.1-mini", 0.40m, 1.60m),
-            new OpenAIModel("gpt-4.1-nano", 0.10m, 0.40m),
-            new OpenAIModel("gpt-4.1", 2.00m, 8.00m),
-            new OpenAIModel("gpt-4o-mini", 0.15m, 0.60m),
-            new OpenAIModel("gpt-3.5-turbo", 0.50m, 1.50m),
-        };
+            get => _scope;
+            set
+            {
+                _scope = value;
+                _serializedContext = null;
+            }
+        }
 
-        public OpenAIService(ConfigService configService, AutomationService automationService)
+        // dependencies
+        private readonly AutomationService _automationService;
+        private readonly ISerDe _serializer;
+
+
+        public OpenAIService(ConfigService configService, AutomationService automationService, ISerDe serializer)
         {
             _automationService = automationService;
+            _serializer = serializer;
 
             Model = AvailableModels[0];
 
@@ -58,10 +53,10 @@ namespace VoiceR.Llm
             }
             _systemPrompt = config.SystemPrompt ?? string.Empty;
 
-            _systemPrompt = """
-You are a helpful assistant that can help with UI automation in Windows. As a context, you will get a json structure of the visual hierarchy of the UI.
-Each item in the json structure is a UI element and has several possible actions to execute. Those depend on "available patterns". Possible patterns and actions and params are:
-- ExpandCollapse: Expand or collapse the element.
+            _systemPrompt = $$"""
+You are a helpful assistant that can help with UI automation in Windows. As context, you will get a {{_serializer.Format}} structure of the visual hierarchy of the UI. The hierarchy is a tree, so parent nodes give context for the children recursively.
+Each item in the tree is a UI element and has several possible actions to execute. Those depend on "available patterns". Possible patterns and actions and params are:
+- ExpandCollapse: Expand or collapse the element (e.g. menus or panes)
   Action: ExpandOrCollapse (possible params: expanded, collapsed)
 - Invoke: Invoke the element like pressing a button.
   Action: Invoke (possible params: none)
@@ -77,8 +72,6 @@ Each item in the json structure is a UI element and has several possible actions
 
 Do not use any action that is not available for the element. Do not use any other parameters than the ones specified. Al parameters are mandatory.
 
-The user will ask you to perform an action on one ore more specific UI elements. You will need to determine the best way to perform the action based on the available patterns and the context.
-
 You will return a json object with the actions to perform on the UI elements and the possible parameters. The resulting json must be a list where each item is a json object with the action and the possible parameters.
 {
     "actions": [
@@ -89,22 +82,47 @@ You will return a json object with the actions to perform on the UI elements and
         }
     ]
 }
+
+The user will ask you to perform an action on one ore more specific UI elements. You will need to determine the best way to perform the action based on the available patterns and the context. If you do not know what to do, return an empty list.
 """;
         }
 
-        public string ContextJson
+        public string SerializedContext
         {
             get
             {
+                if (_serializedContext != null)
+                {
+                    return _serializedContext;
+                }
                 Item? item = Scope ?? _automationService.CompactRoot ?? _automationService.Root;
                 if (item == null)
                 {
-                    throw new InvalidOperationException("No scope is set.");
+                    throw new InvalidOperationException("Cannot retrieve scope");
                 }
-                return ItemJsonSerializer.ToJson(item);
+                _serializedContext = _serializer.Serialize(item);
+                return _serializedContext;
             }
         }
 
+        /// <summary>
+        /// Available OpenAI models (Standard tier pricing).
+        /// </summary>
+        /// <see cref="https://platform.openai.com/docs/pricing?latest-pricing=standard"/>
+        public static readonly IReadOnlyList<LargeLanguageModel> _availableModels = new List<LargeLanguageModel>
+        {
+            new LargeLanguageModel("gpt-5-mini", 0.25m, 2.00m),
+            new LargeLanguageModel("gpt-5-nano", 0.05m, 0.40m),
+            new LargeLanguageModel("gpt-5", 1.25m, 10.00m),
+            new LargeLanguageModel("gpt-4.1-mini", 0.40m, 1.60m),
+            new LargeLanguageModel("gpt-4.1-nano", 0.10m, 0.40m),
+            new LargeLanguageModel("gpt-4.1", 2.00m, 8.00m),
+            new LargeLanguageModel("gpt-4o-mini", 0.15m, 0.60m),
+            new LargeLanguageModel("gpt-3.5-turbo", 0.50m, 1.50m),
+        };
+
+        public List<LargeLanguageModel> AvailableModels => _availableModels.ToList();
+        
         /// <summary>
         /// Generates a response from OpenAI based on the user prompt.
         /// </summary>
@@ -114,7 +132,7 @@ You will return a json object with the actions to perform on the UI elements and
             ChatClient client = new ChatClient(Model.Name, _apiKey);
 
             // Combine context with user prompt
-            string context = ContextJson;
+            string context = SerializedContext;
             string fullPrompt = string.IsNullOrWhiteSpace(context)
                 ? userPrompt
                 : $"Context (UI Element JSON):\n{context}\n\nUser Request:\n{userPrompt}";
@@ -139,13 +157,11 @@ You will return a json object with the actions to perform on the UI elements and
             result.EstimatedInputPriceUSD = result.InputTokens * Model.InputPricePerMillion / 1000000;
             result.EstimatedOutputPriceUSD = result.OutputTokens * Model.OutputPricePerMillion / 1000000;
             result.ElapsedMilliseconds = stopwatch.ElapsedMilliseconds;
+            _serializer.ExtractActionsFromResponse(result.Response, out List<Action> actions, out List<string> errors);
+            result.Actions = actions;
+            result.Errors = errors;
 
             return result;
-        }
-
-        public bool IsValidResponse(string response)
-        {
-            return ItemJsonSerializer.IsValidResponse(response);
         }
     }
 }
