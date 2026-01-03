@@ -10,7 +10,7 @@ namespace VoiceR.Llm
     /// <summary>
     /// Serializes Item objects to JSON representation for LLM consumption.
     /// </summary>
-    public class ItemJsonSerializer : ISerDe
+    public class ItemJsonSerializer : ISerializer, IDeserializer
     {
         private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
         {
@@ -66,7 +66,8 @@ namespace VoiceR.Llm
                 root = doc.RootElement;
 
                 // expect object root with "actions" property that is an array
-                try {
+                try
+                {
                     if (root.ValueKind != JsonValueKind.Object)
                     {
                         errors.Add("the response is not an object");
@@ -107,7 +108,8 @@ namespace VoiceR.Llm
                     JsonElement paramsElement;
 
                     // get id
-                    try {
+                    try
+                    {
                         string? s = child.GetProperty("id").GetString();
                         if (string.IsNullOrWhiteSpace(s))
                         {
@@ -123,7 +125,8 @@ namespace VoiceR.Llm
                     }
 
                     // get action
-                    try {
+                    try
+                    {
                         string? s = child.GetProperty("action").GetString();
                         if (string.IsNullOrWhiteSpace(s))
                         {
@@ -141,7 +144,8 @@ namespace VoiceR.Llm
                     // get params
                     if (child.TryGetProperty("params", out paramsElement))
                     {
-                        try {
+                        try
+                        {
                             if (paramsElement.ValueKind != JsonValueKind.Array)
                             {
                                 errors.Add($"action #{index}: params is not an array");

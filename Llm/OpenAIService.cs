@@ -35,13 +35,15 @@ namespace VoiceR.Llm
 
         // dependencies
         private readonly AutomationService _automationService;
-        private readonly ISerDe _serializer;
+        private readonly ISerializer _serializer;
+        private readonly IDeserializer _deserializer;
 
 
-        public OpenAIService(ConfigService configService, AutomationService automationService, ISerDe serializer)
+        public OpenAIService(ConfigService configService, AutomationService automationService, ISerializer serializer, IDeserializer deserializer)
         {
             _automationService = automationService;
             _serializer = serializer;
+            _deserializer = deserializer;
 
             Model = AvailableModels[0];
 
@@ -122,7 +124,7 @@ The user will ask you to perform an action on one ore more specific UI elements.
         };
 
         public List<LargeLanguageModel> AvailableModels => _availableModels.ToList();
-        
+
         /// <summary>
         /// Generates a response from OpenAI based on the user prompt.
         /// </summary>
@@ -144,7 +146,7 @@ The user will ask you to perform an action on one ore more specific UI elements.
 
             // call the LLM
             Stopwatch stopwatch = Stopwatch.StartNew();
-            var completion = await client.CompleteChatAsync(messages); 
+            var completion = await client.CompleteChatAsync(messages);
             stopwatch.Stop();
 
             // prepare result
@@ -157,7 +159,7 @@ The user will ask you to perform an action on one ore more specific UI elements.
             result.EstimatedInputPriceUSD = result.InputTokens * Model.InputPricePerMillion / 1000000;
             result.EstimatedOutputPriceUSD = result.OutputTokens * Model.OutputPricePerMillion / 1000000;
             result.ElapsedMilliseconds = stopwatch.ElapsedMilliseconds;
-            _serializer.ExtractActionsFromResponse(result.Response, out List<Action> actions, out List<string> errors);
+            _deserializer.ExtractActionsFromResponse(result.Response, out List<Action> actions, out List<string> errors);
             result.Actions = actions;
             result.Errors = errors;
 
