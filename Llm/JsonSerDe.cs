@@ -7,10 +7,7 @@ using VoiceR.Model;
 
 namespace VoiceR.Llm
 {
-    /// <summary>
-    /// Serializes Item objects to JSON representation for LLM consumption.
-    /// </summary>
-    public class ItemJsonSerializer : ISerializer, IDeserializer
+    public class JsonSerDe : ISerializer, IDeserializer
     {
         private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
         {
@@ -21,18 +18,13 @@ namespace VoiceR.Llm
 
         private AutomationService _automationService;
 
-        public ItemJsonSerializer(AutomationService automationService)
+        public JsonSerDe(AutomationService automationService)
         {
             _automationService = automationService;
         }
 
         public string Format => "json";
 
-        /// <summary>
-        /// Converts an Item to a JSON string representation.
-        /// </summary>
-        /// <param name="item">The Item to serialize.</param>
-        /// <returns>A formatted JSON string.</returns>
         public string Serialize(Item item)
         {
             if (item == null)

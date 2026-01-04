@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Windows.Automation;
+using VoiceR.Config;
 
 namespace VoiceR.Model
 {
@@ -10,10 +11,10 @@ namespace VoiceR.Model
     /// </summary>
     public class AutomationService
     {
-
-        public const int MaxDepth = 5;
-
         private readonly Dictionary<string, Item> _itemById = new();
+
+        // dependencies
+        private readonly ConfigService _configService;
 
         /// <summary>
         /// The root item of the UI tree.
@@ -21,16 +22,6 @@ namespace VoiceR.Model
         public Item? Root { get; private set; }
 
         public Item? CompactRoot { get; private set; }
-
-        /// <summary>
-        /// Time taken to retrieve all UI elements in milliseconds.
-        /// </summary>
-        public long RetrievalTimeMs { get; private set; }
-
-        /// <summary>
-        /// Total count of all item (inner items + leaves).
-        /// </summary>
-        public int TotalItemCount { get; private set; }
 
         /// <summary>
         /// Gets an item by its unique ID.
@@ -47,33 +38,24 @@ namespace VoiceR.Model
             throw new KeyNotFoundException($"No item found with ID: {id}");
         }
 
-        /// <summary>
-        /// Creates a new ItemService instance by scanning the entire Windows UI tree.
-        /// </summary>
-        /// <returns>A new ItemService instance with scan results.</returns>
-        public static AutomationService Create()
+        public AutomationService(ConfigService configService)
         {
-            var service = new AutomationService();
-            service.PerformScan();
-            return service;
+            _configService = configService;
         }
 
         /// <summary>
         /// Scans the entire Windows UI tree and populates the service properties.
         /// </summary>
-        private void PerformScan()
+        public void PerformScan()
         {
-            var stopwatch = Stopwatch.StartNew();
-
             try
             {
                 // Get the desktop root element
                 AutomationElement rootElement = AutomationElement.RootElement;
 
                 // Build the tree recursively
-                int itemCount = 0;
-                Root = CollectAllItems(rootElement, _itemById, ref itemCount);
-                TotalItemCount = itemCount;
+                int maxDepth = _configService.Load().MaxDepth;
+                Root = CollectAllItems(rootElement, _itemById, maxDepth);
                 Root.CheckLevelOfInformation();
                 UpdateCompactRoot();
             }
@@ -82,25 +64,20 @@ namespace VoiceR.Model
                 Console.WriteLine($"Error scanning UI tree: {ex.Message}");
 
                 Root = null;
-                TotalItemCount = 1;
                 _itemById.Clear();
             }
-
-            stopwatch.Stop();
-            RetrievalTimeMs = stopwatch.ElapsedMilliseconds;
         }
 
         /// <summary>
         /// Recursively builds a tree from an AutomationElement.
         /// </summary>
-        private static Item CollectAllItems(AutomationElement element, Dictionary<string, Item> itemById, ref int itemCount, int depth=0)
+        private static Item CollectAllItems(AutomationElement element, Dictionary<string, Item> itemById, int maxDepth, int depth = 0)
         {
-            itemCount++;
-
             Item item = Item.FromElement(element);
             itemById[item.Id] = item;
 
-            if (depth >= MaxDepth) {
+            if (depth >= maxDepth)
+            {
                 return item;
             }
 
@@ -114,7 +91,7 @@ namespace VoiceR.Model
                 // {
                 //     Console.WriteLine(autoElement.Current.Name);
                 // }
-                
+
                 // Use ControlViewWalker for a cleaner view of the UI tree
                 TreeWalker walker = TreeWalker.ControlViewWalker;
                 AutomationElement? child = walker.GetFirstChild(element);
@@ -123,7 +100,7 @@ namespace VoiceR.Model
                 {
                     try
                     {
-                        Item childItem = CollectAllItems(child, itemById, ref itemCount, depth + 1);
+                        Item childItem = CollectAllItems(child, itemById, maxDepth, depth + 1);
                         item.AddChild(childItem);
                         child = walker.GetNextSibling(child);
                     }
@@ -151,7 +128,8 @@ namespace VoiceR.Model
 
         public void UpdateCompactRoot()
         {
-            if (Root == null) {
+            if (Root == null)
+            {
                 throw new InvalidOperationException("Root is null");
             }
 
@@ -159,7 +137,7 @@ namespace VoiceR.Model
 
             foreach (Item child in Root.GetChildren())
             {
-                if (child.LoI == Item.LevelOfInformation.None) 
+                if (child.LoI == Item.LevelOfInformation.None)
                 {
                     continue;
                 }
@@ -172,7 +150,7 @@ namespace VoiceR.Model
             List<Item> compactCopyChildren = [];
             foreach (Item child in item.GetChildren())
             {
-                if (child.LoI == Item.LevelOfInformation.None) 
+                if (child.LoI == Item.LevelOfInformation.None)
                 {
                     continue;
                 }

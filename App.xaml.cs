@@ -18,9 +18,9 @@ namespace VoiceR
         {
             // dependencies
             ConfigService configService = new ConfigService();
-            AutomationService automationService = AutomationService.Create();
+            AutomationService automationService = new AutomationService(configService);
             ISerializer serializer = new YamlSerializer(true);
-            IDeserializer deserializer = new ItemJsonSerializer(automationService);
+            IDeserializer deserializer = new JsonSerDe(automationService);
             ILlmService openAIService = new OpenAIService(configService, automationService, serializer, deserializer);
 
             // main window, currently unused

@@ -23,6 +23,7 @@ namespace VoiceR.Config
 
                 config.OpenAiApiKey = configuration["OpenAiApiKey"] ?? string.Empty;
                 config.SystemPrompt = configuration["SystemPrompt"] ?? string.Empty;
+                config.MaxDepth = int.TryParse(configuration["MaxDepth"], out int maxDepth) ? maxDepth : 5;
             }
 
             return config;

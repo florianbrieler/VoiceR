@@ -6,6 +6,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -23,14 +24,31 @@
                      BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"/>
         </StackPanel>
 
+        <!-- Max Depth -->
+        <StackPanel Grid.Row="1" Margin="0,0,0,16">
+            <TextBlock Text="Max Depth" 
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,8"/>
+            <NumberBox x:Name="MaxDepthNumberBox"
+                       PlaceholderText="Enter max depth (default: 10)"
+                       Minimum="1"
+                       Maximum="20"
+                       Value="10"
+                       SpinButtonPlacementMode="Inline"
+                       Padding="12"
+                       BorderThickness="1"
+                       Background="{ThemeResource LayerFillColorDefaultBrush}"
+                       BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"/>
+        </StackPanel>
+
         <!-- System Prompt Label -->
-        <TextBlock Grid.Row="1" 
+        <TextBlock Grid.Row="2" 
                    Text="System Prompt" 
                    FontWeight="SemiBold"
                    Margin="0,0,0,8"/>
 
         <!-- System Prompt TextBox -->
-        <ScrollViewer Grid.Row="2"
+        <ScrollViewer Grid.Row="3"
                       VerticalScrollBarVisibility="Auto"
                       Margin="0,0,0,16">
             <TextBox x:Name="SystemPromptTextBox"
@@ -46,7 +64,7 @@
         </ScrollViewer>
 
         <!-- Save Button -->
-        <Button Grid.Row="3"
+        <Button Grid.Row="4"
                 Content="Save"
                 HorizontalAlignment="Right"
                 Padding="24,10"

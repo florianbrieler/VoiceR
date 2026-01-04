@@ -30,6 +30,7 @@ namespace VoiceR
             var config = _configService.Load();
             ApiKeyTextBox.Text = config.OpenAiApiKey;
             SystemPromptTextBox.Text = config.SystemPrompt;
+            MaxDepthNumberBox.Value = config.MaxDepth;
         }
 
         private void SaveButton_Click(object sender, RoutedEventArgs e)
@@ -37,7 +38,8 @@ namespace VoiceR
             var config = new AppConfig
             {
                 OpenAiApiKey = ApiKeyTextBox.Text,
-                SystemPrompt = SystemPromptTextBox.Text
+                SystemPrompt = SystemPromptTextBox.Text,
+                MaxDepth = (int)MaxDepthNumberBox.Value
             };
 
             _configService.Save(config);

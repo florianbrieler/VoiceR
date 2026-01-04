@@ -63,7 +63,7 @@ namespace VoiceR.Model
                 Name = element.Current.Name ?? string.Empty,
                 AutomationId = element.Current.AutomationId ?? string.Empty,
                 ClassName = element.Current.ClassName ?? string.Empty,
-                HelpText = ht == AutomationElement.NotSupported ? string.Empty : (string) ht, // why not just element.current.helpText?
+                HelpText = ht == AutomationElement.NotSupported ? string.Empty : (string)ht, // why not just element.current.helpText?
                 AvailablePatterns = availablePatterns,
                 Element = element,
                 Properties = props,
@@ -147,7 +147,8 @@ namespace VoiceR.Model
             None
         }
 
-        public void CheckLevelOfInformation() {
+        public void CheckLevelOfInformation()
+        {
             LevelOfInformation maxLoI = LevelOfInformation.None;
 
             foreach (Item child in Children)
@@ -162,9 +163,13 @@ namespace VoiceR.Model
             if (!string.IsNullOrEmpty(Name) || AvailablePatterns.Count > 0) // ClassName as well?
             {
                 LoI = LevelOfInformation.Full;
-            } else if (maxLoI == LevelOfInformation.Full) {
+            }
+            else if (maxLoI == LevelOfInformation.Full)
+            {
                 LoI = LevelOfInformation.Connector;
-            } else {
+            }
+            else
+            {
                 LoI = maxLoI;
             }
         }
@@ -172,6 +177,16 @@ namespace VoiceR.Model
         private static string GenerateShortGuid()
         {
             return Guid.NewGuid().ToString("N")[..12];
+        }
+
+        public int Size()
+        {
+            int size = 1;
+            foreach (Item child in Children)
+            {
+                size += child.Size();
+            }
+            return size;
         }
     }
 

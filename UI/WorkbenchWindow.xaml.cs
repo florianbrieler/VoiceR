@@ -1,11 +1,11 @@
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Windows.Automation;
-using System.Collections.Generic;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using VoiceR.Config;
 using VoiceR.Llm;
@@ -19,8 +19,9 @@ namespace VoiceR
     {
         // Dictionary to map TreeViewNode to UIAutomationTreeNode
         private Dictionary<TreeViewNode, Item> _nodeMap = new Dictionary<TreeViewNode, Item>();
-        
+
         // Reverse mapping from display text to TreeViewNode (since TreeViewItem.Content is the string)
+
         private Dictionary<string, TreeViewNode> _displayTextToNodeMap = new Dictionary<string, TreeViewNode>();
 
         // Divider drag state
@@ -48,15 +49,18 @@ namespace VoiceR
 
             // Set window title
             Title = "VoiceR - Workbench";
-            
+
             // Set window icon
+
             IconHelper.SetWindowIcon(this);
-            
+
             // Set window size
+
             var appWindow = this.AppWindow;
             appWindow.Resize(new Windows.Graphics.SizeInt32(1400, 800));
-            
+
             // Populate model combo box
+
             foreach (var model in _llmService.AvailableModels)
             {
                 ModelComboBox.Items.Add(new ComboBoxItem
@@ -79,17 +83,14 @@ namespace VoiceR
             if (_hasLoaded) return;
             _hasLoaded = true;
 
-            // Show loading state
-            // RetrievalTimeText.Text = "Scanning...";
-            // TotalElementsText.Text = "...";
-
-            // Run the scan on a background thread to keep UI responsive
-            // _automationService = await Task.Run(() => AutomationService.Create());
-            // await Task.Run(() => _automationService.UpdateCompactRoot());
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            _automationService.PerformScan();
+            stopwatch.Stop();
+            long retrievalTimeMs = stopwatch.ElapsedMilliseconds;
 
             // Update metrics
-            RetrievalTimeText.Text = $"{_automationService.RetrievalTimeMs} ms";
-            TotalElementsText.Text = _automationService.TotalItemCount.ToString("N0");
+            RetrievalTimeText.Text = $"{retrievalTimeMs} ms";
+            TotalElementsText.Text = _automationService.Root?.Size().ToString("N0") ?? "-";
 
             // Populate the tree view with full tree
             PopulateTreeView(_automationService.Root);
@@ -100,7 +101,8 @@ namespace VoiceR
             UITreeView.RootNodes.Clear();
             _nodeMap.Clear(); // Clear the mapping when repopulating
             _displayTextToNodeMap.Clear(); // Clear the reverse mapping
-            
+
+
             var rootTreeNode = CreateTreeViewNode(rootNode);
             UITreeView.RootNodes.Add(rootTreeNode);
         }
@@ -136,8 +138,9 @@ namespace VoiceR
 
             // Store the mapping
             _nodeMap[treeViewNode] = node;
-            
+
             // Store reverse mapping (use a unique key in case of duplicate display texts)
+
             var displayText = node.DisplayText;
             var uniqueKey = displayText;
             int counter = 0;
@@ -161,7 +164,8 @@ namespace VoiceR
         {
             // Find the TreeViewNode that was right-clicked
             TreeViewNode? targetNode = null;
-            
+
+
             if (args.OriginalSource is DependencyObject source)
             {
                 // Walk up the visual tree to find the TreeViewItem container
@@ -213,7 +217,7 @@ namespace VoiceR
 
                 // Store the target node for menu item handlers
                 _contextMenuTargetNode = targetNode;
-                
+
                 // Create and show the context menu programmatically
                 var menuFlyout = new MenuFlyout();
                 bool needsSeparator = false;
@@ -300,11 +304,13 @@ namespace VoiceR
                     var maximizeItem = new MenuFlyoutItem { Text = "Maximize" };
                     maximizeItem.Click += MaximizeMenuItem_Click;
                     menuFlyout.Items.Add(maximizeItem);
-                    
+
+
                     var minimizeItem = new MenuFlyoutItem { Text = "Minimize" };
                     minimizeItem.Click += MinimizeMenuItem_Click;
                     menuFlyout.Items.Add(minimizeItem);
-                    
+
+
                     var normalItem = new MenuFlyoutItem { Text = "Normal" };
                     normalItem.Click += NormalMenuItem_Click;
                     menuFlyout.Items.Add(normalItem);
@@ -331,8 +337,9 @@ namespace VoiceR
                     workWithNodeItem.Click += WorkWithNodeMenuItem_Click;
                     menuFlyout.Items.Add(workWithNodeItem);
                 }
-                
+
                 // Show the menu at the pointer position
+
                 if (sender is FrameworkElement frameworkElement)
                 {
                     if (args.TryGetPosition(sender, out var point))
@@ -344,7 +351,8 @@ namespace VoiceR
                         menuFlyout.ShowAt(frameworkElement);
                     }
                 }
-                
+
+
                 args.Handled = true;
                 return;
             }
@@ -524,9 +532,10 @@ namespace VoiceR
             {
                 return mappedNode;
             }
-            
+
             // If exact match fails, try to find by matching the base display text
             // (handles the case where we added a suffix for uniqueness)
+
             foreach (var kvp in _displayTextToNodeMap)
             {
                 var baseKey = kvp.Key.Contains('_') ? kvp.Key.Substring(0, kvp.Key.LastIndexOf('_')) : kvp.Key;
@@ -535,7 +544,8 @@ namespace VoiceR
                     return kvp.Value;
                 }
             }
-            
+
+
             return null;
         }
 
@@ -619,12 +629,14 @@ namespace VoiceR
                 // Switch to compact tree
                 TreeViewToggle.Content = "Compact tree";
                 PopulateTreeView(_automationService.CompactRoot);
+                TotalElementsText.Text = _automationService.CompactRoot?.Size().ToString("N0") ?? "-";
             }
             else
             {
                 // Switch to full tree
                 TreeViewToggle.Content = "Full tree";
                 PopulateTreeView(_automationService.Root);
+                TotalElementsText.Text = _automationService.Root?.Size().ToString("N0") ?? "-";
             }
         }
 
@@ -667,10 +679,12 @@ namespace VoiceR
             // generate response
             try
             {
-                _llmService.Model = selectedModel;   
+                _llmService.Model = selectedModel;
+
                 _llmService.Scope = _workingNode != null ? _nodeMap[_workingNode] : null;
                 LlmResult result = await _llmService.GenerateAsync(prompt);
-                
+
+
                 ResponseDetails.Text = $"Input tokens: {result.InputTokens} (est. ${result.EstimatedInputPriceUSD})\nOutput tokens: ${result.OutputTokens} (est. ${result.EstimatedOutputPriceUSD})\nDuration: {result.ElapsedMilliseconds}ms";
                 ResponseDetails.Visibility = Visibility.Visible;
                 ResponseTextBox.Text = result.Response;
