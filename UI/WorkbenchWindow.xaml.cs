@@ -11,7 +11,10 @@ using VoiceR.Config;
 using VoiceR.Llm;
 using VoiceR.Model;
 using VoiceR.UI;
+using VoiceR.Voice;
+using Whisper.net.Ggml;
 using Windows.Foundation;
+using Windows.UI;
 
 namespace VoiceR
 {
@@ -38,6 +41,10 @@ namespace VoiceR
         private readonly ILlmService _llmService;
 
         private LlmResult? _lastLlmResult = null;
+
+        // Voice recording
+        private WhisperConverter? _whisperConverter;
+        private bool _hasVoiceInitialized = false;
 
         public WorkbenchWindow(AutomationService automationService, ILlmService llmService)
         {
@@ -71,8 +78,38 @@ namespace VoiceR
             }
             ModelComboBox.SelectedIndex = 0;
 
+            // Populate Whisper model combo box
+            PopulateWhisperModelComboBox();
+
             // Load UI tree when window is activated
             this.Activated += WorkbenchWindow_Activated;
+            this.Closed += WorkbenchWindow_Closed;
+        }
+
+        private void PopulateWhisperModelComboBox()
+        {
+            WhisperModelComboBox.Items.Clear();
+
+            var models = new[]
+            {
+                (GgmlType.Tiny, "Tiny (~75MB)"),
+                (GgmlType.Base, "Base (~142MB)"),
+                (GgmlType.Small, "Small (~466MB)"),
+                (GgmlType.Medium, "Medium (~1.5GB)"),
+                (GgmlType.LargeV2, "Large V2 (~2.9GB)")
+            };
+
+            foreach (var (modelType, displayName) in models)
+            {
+                WhisperModelComboBox.Items.Add(new ComboBoxItem
+                {
+                    Content = displayName,
+                    Tag = modelType
+                });
+            }
+
+            // Default to Base model
+            WhisperModelComboBox.SelectedIndex = 1;
         }
 
         private bool _hasLoaded = false;
@@ -94,6 +131,56 @@ namespace VoiceR
 
             // Populate the tree view with full tree
             PopulateTreeView(_automationService.Root);
+
+            // Initialize voice recording
+            if (!_hasVoiceInitialized)
+            {
+                _hasVoiceInitialized = true;
+                _ = InitializeVoiceAsync();
+            }
+        }
+
+        private async Task InitializeVoiceAsync()
+        {
+            try
+            {
+                _whisperConverter = new WhisperConverter();
+                _whisperConverter.RecordingStateChanged += WhisperConverter_RecordingStateChanged;
+
+                // Initialize with default model (Base)
+                var defaultModel = WhisperModelComboBox.SelectedItem as ComboBoxItem;
+                if (defaultModel?.Tag is GgmlType modelType)
+                {
+                    await _whisperConverter.InitializeAsync(modelType);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Show error but don't block the UI
+                System.Diagnostics.Debug.WriteLine($"Failed to initialize voice recording: {ex.Message}");
+            }
+        }
+
+        private void WhisperConverter_RecordingStateChanged(object? sender, bool isRecording)
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                UpdateVoiceStatusIndicator(isRecording);
+            });
+        }
+
+        private void UpdateVoiceStatusIndicator(bool isRecording)
+        {
+            if (isRecording)
+            {
+                // Red when recording
+                VoiceStatusIndicator.Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 244, 67, 54)); // #F44336
+            }
+            else
+            {
+                // Green when ready
+                VoiceStatusIndicator.Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 76, 175, 80)); // #4CAF50
+            }
         }
 
         private void PopulateTreeView(Item? rootNode)
@@ -647,13 +734,12 @@ namespace VoiceR
         private async void GoButton_Click(object sender, RoutedEventArgs e)
         {
             ExecuteButton.IsEnabled = false;
-            ResponseDetails.Visibility = Visibility.Collapsed;
 
             // get prompt
             string prompt = PromptTextBox.Text;
             if (string.IsNullOrWhiteSpace(prompt))
             {
-                ResponseTextBox.Text = "Error: Please enter a prompt.";
+                ResponseErrors.Text = "Error: Please enter a prompt.";
                 return;
             }
 
@@ -661,20 +747,22 @@ namespace VoiceR
             ComboBoxItem? selectedItem = ModelComboBox.SelectedItem as ComboBoxItem;
             if (selectedItem == null)
             {
-                ResponseTextBox.Text = "Error: Please select a model.";
+                ResponseErrors.Text = "Error: Please select a model.";
                 return;
             }
             LargeLanguageModel? selectedModel = selectedItem.Tag as LargeLanguageModel;
             if (selectedModel == null)
             {
-                ResponseTextBox.Text = "Error: Please select a model.";
+                ResponseErrors.Text = "Error: Please select a model.";
                 return;
             }
 
             // show loading state
             GoButton.IsEnabled = false;
             ModelComboBox.IsEnabled = false;
-            ResponseTextBox.Text = "Generating response...";
+            ResponseDetails.Text = "Generating response...";
+            ResponseTextBox.Text = "";
+            ResponseErrors.Text = "-";
 
             // generate response
             try
@@ -686,16 +774,21 @@ namespace VoiceR
 
 
                 ResponseDetails.Text = $"Input tokens: {result.InputTokens} (est. ${result.EstimatedInputPriceUSD})\nOutput tokens: ${result.OutputTokens} (est. ${result.EstimatedOutputPriceUSD})\nDuration: {result.ElapsedMilliseconds}ms";
-                ResponseDetails.Visibility = Visibility.Visible;
                 ResponseTextBox.Text = result.Response;
                 ResponseErrors.Text = result.Errors.Count > 0 ? string.Join("\n", result.Errors) : $"no errors, extracted {result.Actions.Count} action(s)";
                 ExecuteButton.IsEnabled = result.Errors.Count == 0;
 
                 _lastLlmResult = result;
+
+                // auto execute if no errors and auto execute checkbox is checked
+                if (result.Errors.Count == 0 && AutoExecuteCheckBox.IsChecked == true)
+                {
+                    ExecuteButton_Click(ExecuteButton, new RoutedEventArgs());
+                }
             }
             catch (Exception ex)
             {
-                ResponseDetails.Text = "";
+                ResponseDetails.Text = "-";
                 ResponseTextBox.Text = $"Error: {ex.Message}";
             }
             finally
@@ -720,6 +813,147 @@ namespace VoiceR
             {
                 action();
             }
+        }
+
+        #endregion
+
+        #region Prompt TextBox
+
+        private void PromptTextBox_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            // Check for Ctrl+Enter
+            if (e.Key == Windows.System.VirtualKey.Enter)
+            {
+                var controlPressed = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
+                bool isCtrlDown = (controlPressed & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+
+                if (isCtrlDown)
+                {
+                    // Invoke the Go button
+                    GoButton_Click(GoButton, new RoutedEventArgs());
+                    e.Handled = true;
+                }
+            }
+        }
+
+        #endregion
+
+        #region Voice Recording
+
+        private async void ListenButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_whisperConverter == null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (!_whisperConverter.IsRecording)
+                {
+                    // Start recording
+                    _whisperConverter.StartRecording();
+                    ListenButton.Content = "Stop";
+                    ReplayButton.IsEnabled = false;
+                    AudioDetails.Text = "-";
+                }
+                else
+                {
+                    // Stop recording and transcribe
+                    ListenButton.IsEnabled = false;
+
+                    Stopwatch stopwatch = Stopwatch.StartNew();
+                    string transcribedText = await _whisperConverter.StopRecordingAsync();
+                    stopwatch.Stop();
+                    long transcriptionTimeMs = stopwatch.ElapsedMilliseconds;
+                    AudioDetails.Text = $"Transcription time: {transcriptionTimeMs}ms";
+
+                    // Append transcribed text to prompt box
+                    if (!string.IsNullOrWhiteSpace(transcribedText))
+                    {
+                        if (AutoProcessCheckBox.IsChecked == false)
+                        {
+                            string currentText = PromptTextBox.Text;
+                            bool needsSeparator = !string.IsNullOrWhiteSpace(currentText) && !currentText.EndsWith(" ") && !currentText.EndsWith("\n");
+                            PromptTextBox.Text = currentText + (needsSeparator ? "\n" : "") + transcribedText;
+                        }
+                        else
+                        {
+                            PromptTextBox.Text = transcribedText;
+                            GoButton_Click(GoButton, new RoutedEventArgs());
+                        }
+                    }
+
+                    ListenButton.Content = "Listen";
+                    ListenButton.IsEnabled = true;
+                    ReplayButton.IsEnabled = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                ListenButton.Content = "Listen";
+                ListenButton.IsEnabled = true;
+                System.Diagnostics.Debug.WriteLine($"Voice recording error: {ex.Message}");
+                // Could show a message to the user here
+            }
+        }
+
+        private async void ReplayButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_whisperConverter == null)
+            {
+                return;
+            }
+
+            try
+            {
+                ReplayButton.IsEnabled = false;
+                await _whisperConverter.ReplayLastRecordingAsync();
+                ReplayButton.IsEnabled = true;
+            }
+            catch (Exception ex)
+            {
+                ReplayButton.IsEnabled = true;
+                System.Diagnostics.Debug.WriteLine($"Replay error: {ex.Message}");
+                // Could show a message to the user here
+            }
+        }
+
+        private async void WhisperModelComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_whisperConverter == null || WhisperModelComboBox.SelectedItem is not ComboBoxItem selectedItem)
+            {
+                return;
+            }
+
+            if (selectedItem.Tag is GgmlType modelType)
+            {
+                try
+                {
+                    // Disable controls while switching models
+                    WhisperModelComboBox.IsEnabled = false;
+                    ListenButton.IsEnabled = false;
+
+                    await _whisperConverter.InitializeAsync(modelType);
+
+                    // Re-enable controls
+                    WhisperModelComboBox.IsEnabled = true;
+                    ListenButton.IsEnabled = true;
+                }
+                catch (Exception ex)
+                {
+                    WhisperModelComboBox.IsEnabled = true;
+                    ListenButton.IsEnabled = true;
+                    System.Diagnostics.Debug.WriteLine($"Failed to switch Whisper model: {ex.Message}");
+                    // Could show a message to the user here
+                }
+            }
+        }
+
+        private void WorkbenchWindow_Closed(object sender, WindowEventArgs args)
+        {
+            _whisperConverter?.Dispose();
+            _whisperConverter = null;
         }
 
         #endregion

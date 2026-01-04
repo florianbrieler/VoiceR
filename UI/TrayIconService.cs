@@ -3,8 +3,8 @@ using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
 using Microsoft.UI.Xaml;
-using VoiceR.Model;
 using VoiceR.Llm;
+using VoiceR.Model;
 
 namespace VoiceR
 {
@@ -29,11 +29,13 @@ namespace VoiceR
         {
             // Get the icon path
             string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "VoiceR.png");
-            
+
             // Create the tray icon
+
             _notifyIcon = new NotifyIcon();
-            
+
             // Load icon from PNG file
+
             if (File.Exists(iconPath))
             {
                 using (var stream = new FileStream(iconPath, FileMode.Open, FileAccess.Read))
@@ -116,19 +118,6 @@ namespace VoiceR
                 });
             };
             menu.Items.Add(workbenchItem);
-
-            // Voice menu item
-            ToolStripMenuItem voiceItem = new ToolStripMenuItem("Voice");
-            voiceItem.Click += (sender, e) =>
-            {
-                // Create and show the voice window on the UI thread
-                _mainWindow.DispatcherQueue.TryEnqueue(() =>
-                {
-                    var voiceWindow = new VoiceWindow();
-                    voiceWindow.Activate();
-                });
-            };
-            menu.Items.Add(voiceItem);
 
             // Separator
             menu.Items.Add(new ToolStripSeparator());
