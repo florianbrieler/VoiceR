@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Windows.Automation;
+using Microsoft.Extensions.Logging;
 using VoiceR.Config;
 
 namespace VoiceR.Model
@@ -15,6 +16,7 @@ namespace VoiceR.Model
 
         // dependencies
         private readonly ConfigService _configService;
+        private readonly ILogger _logger;
 
         /// <summary>
         /// The root item of the UI tree.
@@ -38,9 +40,10 @@ namespace VoiceR.Model
             throw new KeyNotFoundException($"No item found with ID: {id}");
         }
 
-        public AutomationService(ConfigService configService)
+        public AutomationService(ConfigService configService, ILogger logger)
         {
             _configService = configService;
+            _logger = logger;
         }
 
         /// <summary>
@@ -61,7 +64,7 @@ namespace VoiceR.Model
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error scanning UI tree: {ex.Message}");
+                _logger.LogError(ex, "Error scanning UI tree");
 
                 Root = null;
                 _itemById.Clear();
