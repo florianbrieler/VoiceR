@@ -35,6 +35,7 @@ namespace VoiceR
         // Working node tracking (for "Work with this node" feature)
         private TreeViewNode? _workingNode = null;
         private TreeViewItem? _workingTreeViewItem = null;
+        private long _lastRetrievalTimeMs = -1;
 
         // dependencies
         private readonly AutomationService _automationService;
@@ -120,14 +121,17 @@ namespace VoiceR
             if (_hasLoaded) return;
             _hasLoaded = true;
 
+            UIElementsDetails.Text = "loading...";
+
             Stopwatch stopwatch = Stopwatch.StartNew();
             _automationService.PerformScan();
             stopwatch.Stop();
-            long retrievalTimeMs = stopwatch.ElapsedMilliseconds;
+            _lastRetrievalTimeMs = stopwatch.ElapsedMilliseconds;
 
             // Update metrics
-            RetrievalTimeText.Text = $"{retrievalTimeMs} ms";
-            TotalElementsText.Text = _automationService.Root?.Size().ToString("N0") ?? "-";
+            UIElementsDetails.Text =
+                $"Retreival time: {_lastRetrievalTimeMs} ms\n" +
+                $"Total elements: {_automationService.Root?.Size().ToString("N0") ?? "(error occurred)"}";
 
             // Populate the tree view with full tree
             PopulateTreeView(_automationService.Root);
@@ -710,21 +714,14 @@ namespace VoiceR
             if (_automationService == null) return;
 
             bool isCompactMode = TreeViewToggle.IsChecked == true;
+            Item? item = isCompactMode ? _automationService.CompactRoot : _automationService.Root;
+            string label = isCompactMode ? "Compact tree" : "Full tree";
 
-            if (isCompactMode)
-            {
-                // Switch to compact tree
-                TreeViewToggle.Content = "Compact tree";
-                PopulateTreeView(_automationService.CompactRoot);
-                TotalElementsText.Text = _automationService.CompactRoot?.Size().ToString("N0") ?? "-";
-            }
-            else
-            {
-                // Switch to full tree
-                TreeViewToggle.Content = "Full tree";
-                PopulateTreeView(_automationService.Root);
-                TotalElementsText.Text = _automationService.Root?.Size().ToString("N0") ?? "-";
-            }
+            TreeViewToggle.Content = label;
+            PopulateTreeView(item);
+            UIElementsDetails.Text =
+                $"Retreival time: {_lastRetrievalTimeMs} ms\n" +
+                $"Total elements: {(item?.Size().ToString("N0") ?? "-")}";
         }
 
         #endregion
@@ -739,21 +736,14 @@ namespace VoiceR
             string prompt = PromptTextBox.Text;
             if (string.IsNullOrWhiteSpace(prompt))
             {
-                ResponseErrors.Text = "Error: Please enter a prompt.";
+                ResponseDetails.Text = "Error: Please enter a prompt.";
                 return;
             }
 
             // get selected model
-            ComboBoxItem? selectedItem = ModelComboBox.SelectedItem as ComboBoxItem;
-            if (selectedItem == null)
+            if (ModelComboBox.SelectedItem is not ComboBoxItem { Tag: LargeLanguageModel selectedModel })
             {
-                ResponseErrors.Text = "Error: Please select a model.";
-                return;
-            }
-            LargeLanguageModel? selectedModel = selectedItem.Tag as LargeLanguageModel;
-            if (selectedModel == null)
-            {
-                ResponseErrors.Text = "Error: Please select a model.";
+                ResponseDetails.Text = "Error: Please select a model.";
                 return;
             }
 
@@ -762,7 +752,6 @@ namespace VoiceR
             ModelComboBox.IsEnabled = false;
             ResponseDetails.Text = "Generating response...";
             ResponseTextBox.Text = "";
-            ResponseErrors.Text = "-";
 
             // generate response
             try
@@ -773,9 +762,12 @@ namespace VoiceR
                 LlmResult result = await _llmService.GenerateAsync(prompt);
 
 
-                ResponseDetails.Text = $"Input tokens: {result.InputTokens} (est. ${result.EstimatedInputPriceUSD})\nOutput tokens: ${result.OutputTokens} (est. ${result.EstimatedOutputPriceUSD})\nDuration: {result.ElapsedMilliseconds}ms";
+                ResponseDetails.Text =
+                    $"Input tokens: {result.InputTokens} (est. ${result.EstimatedInputPriceUSD})\n" +
+                    $"Output tokens: ${result.OutputTokens} (est. ${result.EstimatedOutputPriceUSD})\n" +
+                    $"Duration: {result.ElapsedMilliseconds}ms" +
+                    (result.Errors.Count > 0 ? "\n" + string.Join("\n", result.Errors) : $"\nno errors, extracted {result.Actions.Count} action(s)");
                 ResponseTextBox.Text = result.Response;
-                ResponseErrors.Text = result.Errors.Count > 0 ? string.Join("\n", result.Errors) : $"no errors, extracted {result.Actions.Count} action(s)";
                 ExecuteButton.IsEnabled = result.Errors.Count == 0;
 
                 _lastLlmResult = result;
@@ -788,8 +780,7 @@ namespace VoiceR
             }
             catch (Exception ex)
             {
-                ResponseDetails.Text = "-";
-                ResponseTextBox.Text = $"Error: {ex.Message}";
+                ResponseDetails.Text = $"Error: {ex.Message}";
             }
             finally
             {

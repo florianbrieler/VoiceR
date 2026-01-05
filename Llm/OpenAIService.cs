@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using OpenAI.Chat;
 using VoiceR.Config;
 using VoiceR.Model;
@@ -15,7 +16,6 @@ namespace VoiceR.Llm
     /// </summary>
     public class OpenAIService : ILlmService
     {
-        private readonly string _apiKey;
         private readonly string _systemPrompt;
 
         private string? _serializedContext = null;
@@ -34,26 +34,25 @@ namespace VoiceR.Llm
         }
 
         // dependencies
+        private readonly ConfigService _configService;
         private readonly AutomationService _automationService;
         private readonly ISerializer _serializer;
         private readonly IDeserializer _deserializer;
+        private readonly ILogger _logger;
 
 
-        public OpenAIService(ConfigService configService, AutomationService automationService, ISerializer serializer, IDeserializer deserializer)
+        public OpenAIService(ConfigService configService, AutomationService automationService, ISerializer serializer, IDeserializer deserializer, ILogger logger)
         {
+            _configService = configService;
             _automationService = automationService;
             _serializer = serializer;
             _deserializer = deserializer;
+            _logger = logger;
 
             Model = AvailableModels[0];
 
-            var config = configService.Load();
-            _apiKey = config.OpenAiApiKey ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(_apiKey))
-            {
-                throw new InvalidOperationException("OpenAI API key is not configured.");
-            }
-            _systemPrompt = config.SystemPrompt ?? string.Empty;
+            _systemPrompt = configService.Load().SystemPrompt ?? string.Empty;
+            _logger.LogInformation("System prompt loaded");
 
             _systemPrompt = $$"""
 You are a helpful assistant that can help with UI automation in Windows. As context, you will get a {{_serializer.Format}} structure of the visual hierarchy of the UI. The hierarchy is a tree, so parent nodes give context for the children recursively.
@@ -131,6 +130,12 @@ The user will ask you to perform an action on one ore more specific UI elements.
         /// <param name="userPrompt">The user's prompt text.</param>
         public async Task<LlmResult> GenerateAsync(string userPrompt)
         {
+            string _apiKey = _configService.Load().OpenAiApiKey ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(_apiKey))
+            {
+                _logger.LogError("OpenAI API key is not configured.");
+                throw new InvalidOperationException("OpenAI API key is not configured.");
+            }
             ChatClient client = new ChatClient(Model.Name, _apiKey);
 
             // Combine context with user prompt

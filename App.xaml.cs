@@ -21,23 +21,37 @@ namespace VoiceR
 
             // dependencies
             Microsoft.Extensions.Logging.ILogger logger = CreateLogger();
+            logger.LogInformation("Starting VoiceR");
+
             ConfigService configService = new ConfigService();
+            logger.LogInformation("ConfigService created");
+
             AutomationService automationService = new AutomationService(configService, logger);
+            logger.LogInformation("AutomationService created");
+
             ISerializer serializer = new YamlSerializer(true);
+            logger.LogInformation("Serializer created");
+
             IDeserializer deserializer = new JsonSerDe(automationService);
-            ILlmService openAIService = new OpenAIService(configService, automationService, serializer, deserializer);
+            logger.LogInformation("Deserializer created");
+
+            ILlmService openAIService = new OpenAIService(configService, automationService, serializer, deserializer, logger);
+            logger.LogInformation("LLM Service created");
 
             // main window, currently unused
             _mainWindow = new MainWindow();
             _mainWindow.AppWindow.Hide();
+            logger.LogInformation("MainWindow created");
 
             // tray icon
             TrayIconService trayIconService = new TrayIconService(_mainWindow, automationService, openAIService);
             trayIconService.Initialize();
+            logger.LogInformation("TrayIconService initialized");
 
             // workbench window
             var workbenchWindow = new WorkbenchWindow(automationService, openAIService);
             workbenchWindow.Activate();
+            logger.LogInformation("WorkbenchWindow activated");
         }
 
         private Microsoft.Extensions.Logging.ILogger CreateLogger()
