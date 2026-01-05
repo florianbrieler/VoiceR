@@ -34,7 +34,7 @@ namespace VoiceR.Model
 
             ControlType controlType = element.Current.ControlType;
             // ControlType.ProgrammaticName returns "ControlType.Button" etc.
-            string programmaticName = controlType.ProgrammaticName ?? string.Empty;
+            string programmaticName = controlType?.ProgrammaticName ?? string.Empty;
             programmaticName = programmaticName.Replace("ControlType.", "");
 
             object ht = element.GetCurrentPropertyValue(AutomationElement.HelpTextProperty, true);

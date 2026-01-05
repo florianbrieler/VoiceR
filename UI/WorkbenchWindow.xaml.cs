@@ -130,7 +130,7 @@ namespace VoiceR
 
             // Update metrics
             UIElementsDetails.Text =
-                $"Retreival time: {_lastRetrievalTimeMs} ms\n" +
+                $"Retrieval time: {_lastRetrievalTimeMs}ms\n" +
                 $"Total elements: {_automationService.Root?.Size().ToString("N0") ?? "(error occurred)"}";
 
             // Populate the tree view with full tree
