@@ -71,28 +71,28 @@ namespace VoiceR
             if (_notifyIcon == null) return;
 
             ContextMenuStrip menu = new ContextMenuStrip();
+            menu.ShowImageMargin = false;
+            menu.ShowCheckMargin = false;
+            menu.Margin = new Padding(36, 36, 36, 36);
+            menu.Padding = new Padding(36, 36, 36, 36);
+            menu.AutoSize = true;
 
             // App icon (centered) - using a label with icon
             ToolStripLabel iconLabel = new ToolStripLabel();
-            if (_notifyIcon.Icon != null)
-            {
-                iconLabel.Image = _notifyIcon.Icon.ToBitmap();
-            }
+            iconLabel.Font = new Font("Segoe UI", 14f, FontStyle.Regular);
             iconLabel.Text = "VoiceR";
+            iconLabel.Padding = new Padding(0, 8, 16, 8);
             iconLabel.TextAlign = ContentAlignment.MiddleCenter;
             iconLabel.Enabled = false;
             menu.Items.Add(iconLabel);
 
-            // Separator
-            menu.Items.Add(new ToolStripSeparator());
-
-            // Start menu item
-            ToolStripMenuItem startItem = new ToolStripMenuItem("Start");
-            startItem.Click += (sender, e) =>
-            {
-                ShowAlert("Start", "Start has been clicked.");
-            };
-            menu.Items.Add(startItem);
+            // // Start menu item
+            // ToolStripMenuItem startItem = new ToolStripMenuItem("Start");
+            // startItem.Click += (sender, e) =>
+            // {
+            //     ShowAlert("Start", "Start has been clicked.");
+            // };
+            // menu.Items.Add(startItem);
 
             // Configure menu item
             ToolStripMenuItem configureItem = new ToolStripMenuItem("Configure");
