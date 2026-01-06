@@ -3,18 +3,17 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Windows.Automation;
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
-using VoiceR.Config;
 using VoiceR.Llm;
 using VoiceR.Model;
 using VoiceR.UI;
 using VoiceR.Voice;
 using Whisper.net.Ggml;
 using Windows.Foundation;
-using Windows.UI;
 
 namespace VoiceR
 {
@@ -44,31 +43,45 @@ namespace VoiceR
         private LlmResult? _lastLlmResult = null;
 
         // Voice recording
-        private WhisperConverter? _whisperConverter;
-        private bool _hasVoiceInitialized = false;
+        private IRecorder _recorder;
+        private IConverter _converter;
+        private ILogger _logger;
 
-        public WorkbenchWindow(AutomationService automationService, ILlmService llmService)
+        public WorkbenchWindow(AutomationService automationService, ILlmService llmService, IRecorder recorder, IConverter converter, ILogger logger)
         {
             this.InitializeComponent();
 
             // set dependencies
             _automationService = automationService;
             _llmService = llmService;
-
+            _recorder = recorder;
+            _converter = converter;
+            _logger = logger;
             // Set window title
             Title = "VoiceR - Workbench";
 
             // Set window icon
-
             IconHelper.SetWindowIcon(this);
 
             // Set window size
-
             var appWindow = this.AppWindow;
             appWindow.Resize(new Windows.Graphics.SizeInt32(1400, 800));
 
-            // Populate model combo box
+            // Populate combo boxes
+            PopulateLlmModelComboBox();
+            PopulateWhisperModelComboBox();
 
+            // Load UI tree when window is activated
+            this.Activated += WorkbenchWindow_Activated;
+            this.Closed += WorkbenchWindow_Closed;
+
+            // Subscribe to recording state changed event
+            _recorder.RecordingStateChanged += Recorder_RecordingStateChanged;
+        }
+
+        private void PopulateLlmModelComboBox()
+        {
+            ModelComboBox.Items.Clear();
             foreach (var model in _llmService.AvailableModels)
             {
                 ModelComboBox.Items.Add(new ComboBoxItem
@@ -78,39 +91,32 @@ namespace VoiceR
                 });
             }
             ModelComboBox.SelectedIndex = 0;
-
-            // Populate Whisper model combo box
-            PopulateWhisperModelComboBox();
-
-            // Load UI tree when window is activated
-            this.Activated += WorkbenchWindow_Activated;
-            this.Closed += WorkbenchWindow_Closed;
         }
 
         private void PopulateWhisperModelComboBox()
         {
             WhisperModelComboBox.Items.Clear();
 
-            var models = new[]
-            {
-                (GgmlType.Tiny, "Tiny (~75MB)"),
-                (GgmlType.Base, "Base (~142MB)"),
-                (GgmlType.Small, "Small (~466MB)"),
-                (GgmlType.Medium, "Medium (~1.5GB)"),
-                (GgmlType.LargeV2, "Large V2 (~2.9GB)")
-            };
-
-            foreach (var (modelType, displayName) in models)
+            foreach (var model in _converter.AvailableModels)
             {
                 WhisperModelComboBox.Items.Add(new ComboBoxItem
                 {
-                    Content = displayName,
-                    Tag = modelType
+                    Content = model.Name,
+                    Tag = model
                 });
             }
 
             // Default to Base model
-            WhisperModelComboBox.SelectedIndex = 1;
+            // Set the selected index to the current model of the _converter
+            var selectedModel = _converter.SelectedModel;
+            for (int i = 0; i < WhisperModelComboBox.Items.Count; i++)
+            {
+                if (WhisperModelComboBox.Items[i] is ComboBoxItem item && item.Tag?.Equals(selectedModel) == true)
+                {
+                    WhisperModelComboBox.SelectedIndex = i;
+                    break;
+                }
+            }
         }
 
         private bool _hasLoaded = false;
@@ -136,36 +142,9 @@ namespace VoiceR
             // Populate the tree view with full tree
             PopulateTreeView(_automationService.Root);
 
-            // Initialize voice recording
-            if (!_hasVoiceInitialized)
-            {
-                _hasVoiceInitialized = true;
-                _ = InitializeVoiceAsync();
-            }
         }
 
-        private async Task InitializeVoiceAsync()
-        {
-            try
-            {
-                _whisperConverter = new WhisperConverter();
-                _whisperConverter.RecordingStateChanged += WhisperConverter_RecordingStateChanged;
-
-                // Initialize with default model (Base)
-                var defaultModel = WhisperModelComboBox.SelectedItem as ComboBoxItem;
-                if (defaultModel?.Tag is GgmlType modelType)
-                {
-                    await _whisperConverter.InitializeAsync(modelType);
-                }
-            }
-            catch (Exception ex)
-            {
-                // Show error but don't block the UI
-                System.Diagnostics.Debug.WriteLine($"Failed to initialize voice recording: {ex.Message}");
-            }
-        }
-
-        private void WhisperConverter_RecordingStateChanged(object? sender, bool isRecording)
+        private void Recorder_RecordingStateChanged(object? sender, bool isRecording)
         {
             DispatcherQueue.TryEnqueue(() =>
             {
@@ -833,17 +812,12 @@ namespace VoiceR
 
         private async void ListenButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_whisperConverter == null)
-            {
-                return;
-            }
-
             try
             {
-                if (!_whisperConverter.IsRecording)
+                if (!_recorder.IsRecording)
                 {
                     // Start recording
-                    _whisperConverter.StartRecording();
+                    _recorder.StartRecording();
                     ListenButton.Content = "Stop";
                     ReplayButton.IsEnabled = false;
                     AudioDetails.Text = "-";
@@ -854,7 +828,8 @@ namespace VoiceR
                     ListenButton.IsEnabled = false;
 
                     Stopwatch stopwatch = Stopwatch.StartNew();
-                    string transcribedText = await _whisperConverter.StopRecordingAsync();
+                    AudioData audioData = _recorder.StopRecording();
+                    string transcribedText = await _converter.Transcribe(audioData);
                     stopwatch.Stop();
                     long transcriptionTimeMs = stopwatch.ElapsedMilliseconds;
                     AudioDetails.Text = $"Transcription time: {transcriptionTimeMs}ms";
@@ -884,40 +859,28 @@ namespace VoiceR
             {
                 ListenButton.Content = "Listen";
                 ListenButton.IsEnabled = true;
-                System.Diagnostics.Debug.WriteLine($"Voice recording error: {ex.Message}");
-                // Could show a message to the user here
+                _logger.LogError(ex, "Voice recording error");
             }
         }
 
         private async void ReplayButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_whisperConverter == null)
-            {
-                return;
-            }
-
             try
             {
                 ReplayButton.IsEnabled = false;
-                await _whisperConverter.ReplayLastRecordingAsync();
+                await _recorder.ReplayLastRecording();
                 ReplayButton.IsEnabled = true;
             }
             catch (Exception ex)
             {
                 ReplayButton.IsEnabled = true;
-                System.Diagnostics.Debug.WriteLine($"Replay error: {ex.Message}");
-                // Could show a message to the user here
+                _logger.LogError(ex, "Replay error");
             }
         }
 
         private async void WhisperModelComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (_whisperConverter == null || WhisperModelComboBox.SelectedItem is not ComboBoxItem selectedItem)
-            {
-                return;
-            }
-
-            if (selectedItem.Tag is GgmlType modelType)
+            if (WhisperModelComboBox.SelectedItem is ComboBoxItem selectedItem && selectedItem.Tag is ConverterModel modelType)
             {
                 try
                 {
@@ -925,7 +888,8 @@ namespace VoiceR
                     WhisperModelComboBox.IsEnabled = false;
                     ListenButton.IsEnabled = false;
 
-                    await _whisperConverter.InitializeAsync(modelType);
+                    // Initialize converter with selected model
+                    await _converter.Initialize(modelType);
 
                     // Re-enable controls
                     WhisperModelComboBox.IsEnabled = true;
@@ -935,16 +899,22 @@ namespace VoiceR
                 {
                     WhisperModelComboBox.IsEnabled = true;
                     ListenButton.IsEnabled = true;
-                    System.Diagnostics.Debug.WriteLine($"Failed to switch Whisper model: {ex.Message}");
-                    // Could show a message to the user here
+                    _logger.LogError(ex, "Failed to switch Whisper model");
                 }
             }
         }
 
         private void WorkbenchWindow_Closed(object sender, WindowEventArgs args)
         {
-            _whisperConverter?.Dispose();
-            _whisperConverter = null;
+            _displayTextToNodeMap.Clear();
+            _nodeMap.Clear();
+            _workingNode = null;
+            _workingTreeViewItem = null;
+            _lastLlmResult = null;
+
+            _recorder.RecordingStateChanged -= Recorder_RecordingStateChanged;
+
+            _logger.LogInformation("WorkbenchWindow closed");
         }
 
         #endregion

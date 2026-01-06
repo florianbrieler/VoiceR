@@ -4,6 +4,7 @@ using Serilog;
 using VoiceR.Config;
 using VoiceR.Llm;
 using VoiceR.Model;
+using VoiceR.Voice;
 
 namespace VoiceR
 {
@@ -27,17 +28,20 @@ namespace VoiceR
             ISerializer serializer = new YamlSerializer(true);
             IDeserializer deserializer = new JsonSerDe(automationService);
             ILlmService openAIService = new OpenAIService(configService, automationService, serializer, deserializer, logger);
+            IRecorder recorder = new NAudioRecorder(logger);
+            IConverter converter = new WhisperConverter(logger);
+            converter.Initialize();
 
             // main window, currently unused
             _mainWindow = new MainWindow();
             _mainWindow.AppWindow.Hide();
 
             // tray icon
-            TrayIconService trayIconService = new TrayIconService(_mainWindow, automationService, openAIService);
+            TrayIconService trayIconService = new TrayIconService(_mainWindow, automationService, openAIService, recorder, converter, logger);
             trayIconService.Initialize();
 
             // workbench window
-            var workbenchWindow = new WorkbenchWindow(automationService, openAIService);
+            var workbenchWindow = new WorkbenchWindow(automationService, openAIService, recorder, converter, logger);
             workbenchWindow.Activate();
         }
 

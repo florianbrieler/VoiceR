@@ -110,7 +110,7 @@ The user will ask you to perform an action on one ore more specific UI elements.
         /// Available OpenAI models (Standard tier pricing).
         /// </summary>
         /// <see cref="https://platform.openai.com/docs/pricing?latest-pricing=standard"/>
-        public static readonly IReadOnlyList<LargeLanguageModel> _availableModels = new List<LargeLanguageModel>
+        private static readonly IReadOnlyList<LargeLanguageModel> _availableModels = new List<LargeLanguageModel>
         {
             new LargeLanguageModel("gpt-5-mini", 0.25m, 2.00m),
             new LargeLanguageModel("gpt-5-nano", 0.05m, 0.40m),

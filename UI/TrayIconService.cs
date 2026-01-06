@@ -2,9 +2,11 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using VoiceR.Llm;
 using VoiceR.Model;
+using VoiceR.Voice;
 
 namespace VoiceR
 {
@@ -17,12 +19,18 @@ namespace VoiceR
         private readonly Window _mainWindow;
         private readonly AutomationService _automationService;
         private readonly ILlmService _openAIService;
+        private readonly IRecorder _recorder;
+        private readonly IConverter _converter;
+        private readonly ILogger _logger;
 
-        public TrayIconService(Window mainWindow, AutomationService automationService, ILlmService openAIService)
+        public TrayIconService(Window mainWindow, AutomationService automationService, ILlmService openAIService, IRecorder recorder, IConverter converter, ILogger logger)
         {
             _mainWindow = mainWindow;
             _automationService = automationService;
             _openAIService = openAIService;
+            _recorder = recorder;
+            _converter = converter;
+            _logger = logger;
         }
 
         public void Initialize()
@@ -113,7 +121,7 @@ namespace VoiceR
                 // Create and show the analyze window on the UI thread
                 _mainWindow.DispatcherQueue.TryEnqueue(() =>
                 {
-                    var workbenchWindow = new WorkbenchWindow(_automationService, _openAIService);
+                    var workbenchWindow = new WorkbenchWindow(_automationService, _openAIService, _recorder, _converter, _logger);
                     workbenchWindow.Activate();
                 });
             };
